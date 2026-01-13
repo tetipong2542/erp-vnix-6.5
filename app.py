@@ -23,6 +23,7 @@ from sqlalchemy import func, text, or_, not_, and_
 from sqlalchemy.sql import bindparam
 from sqlalchemy.exc import IntegrityError
 from dotenv import load_dotenv
+from flask_caching import Cache
 
 from utils import (
     now_thai, to_thai_be, to_be_date_str, TH_TZ, current_be_year,
@@ -62,6 +63,9 @@ except ImportError:
     pass
 
 APP_NAME = os.environ.get("APP_NAME", "VNIX ERP")
+
+# Flask-Caching instance (will be initialized in create_app)
+cache = Cache()
 
 
 # ---------------------------------------------------------------------------
@@ -947,6 +951,18 @@ def create_app():
 
     db.init_app(app)
     
+    # ============ FLASK-CACHING CONFIGURATION ============
+    # Use simple cache for single-worker deployment
+    # For multi-worker, consider Redis/Memcached
+    cache_config = {
+        "CACHE_TYPE": "SimpleCache",  # In-memory cache (single-process)
+        "CACHE_DEFAULT_TIMEOUT": 300,  # 5 minutes default
+        "CACHE_THRESHOLD": 500,  # Maximum number of items to store
+    }
+    app.config.from_mapping(cache_config)
+    cache.init_app(app)
+    print("[CACHE] Flask-Caching initialized (SimpleCache, 5min default)")
+    
     # Note: Turso bind engines will be registered inside app.app_context() below
 
     # =========[ NEW ]=========
@@ -1256,12 +1272,32 @@ def create_app():
         turso_config = app.config.get("TURSO_BINDS_CONFIG", {})
         if turso_config:
             from sqlalchemy import create_engine as sa_create_engine
+            print("[DB] ========================================")
+            print("[DB] Turso Database Connection Status")
+            print("[DB] ========================================")
             for bind_key, cfg in turso_config.items():
                 if cfg and cfg.get("url") and cfg.get("token"):
                     url = f"sqlite+{cfg['url']}?secure=true"
                     engine = sa_create_engine(url, connect_args={"auth_token": cfg["token"]})
                     db.engines[bind_key] = engine
-                    print(f"[DB] Registered Turso bind: {bind_key}")
+                    # Test connection
+                    try:
+                        with engine.connect() as conn:
+                            result = conn.execute(text("SELECT 1"))
+                            result.fetchone()
+                        print(f"[DB] ✅ {bind_key.upper()}: Connected successfully ({cfg['url'][:50]}...)")
+                    except Exception as e:
+                        print(f"[DB] ❌ {bind_key.upper()}: Connection FAILED - {str(e)[:100]}")
+            
+            # Test main database (data)
+            try:
+                with db.engine.connect() as conn:
+                    result = conn.execute(text("SELECT 1"))
+                    result.fetchone()
+                print(f"[DB] ✅ DATA (main): Connected successfully")
+            except Exception as e:
+                print(f"[DB] ❌ DATA (main): Connection FAILED - {str(e)[:100]}")
+            print("[DB] ========================================")
         
         db.create_all(bind_key="__all__")
 
@@ -17215,6 +17251,37 @@ def create_app():
         }
         
         return render_template("clear_confirm.html", stats=stats)
+
+    # ============ HEALTH CHECK ENDPOINT ============
+    # Use this for Railway health checks and external keep-alive services
+    @app.route("/health")
+    def health_check():
+        """Health check endpoint for monitoring and keep-alive."""
+        status = {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+        
+        # Check database connections
+        try:
+            db.session.execute(text("SELECT 1"))
+            status["database"] = "connected"
+        except Exception as e:
+            status["database"] = f"error: {str(e)[:50]}"
+            status["status"] = "degraded"
+        
+        # Check Turso binds if configured
+        turso_config = app.config.get("TURSO_BINDS_CONFIG", {})
+        if turso_config:
+            status["turso_binds"] = {}
+            for bind_key in ["price", "supplier"]:
+                try:
+                    eng = db.engines.get(bind_key)
+                    if eng:
+                        with eng.connect() as conn:
+                            conn.execute(text("SELECT 1"))
+                        status["turso_binds"][bind_key] = "connected"
+                except Exception as e:
+                    status["turso_binds"][bind_key] = f"error: {str(e)[:50]}"
+        
+        return jsonify(status)
 
     return app
 

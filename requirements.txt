@@ -11,3 +11,4 @@ gspread
 oauth2client
 python-dotenv==1.2.1
 sqlalchemy-libsql
+Flask-Caching==2.3.0
