@@ -293,12 +293,16 @@ def _supplier_dash_cache_gc():
 def get_engine(bind_key: str | None = None):
     """Return SQLAlchemy engine for a specific bind.
 
-    - bind_key=None -> main (data.db)
-    - bind_key='price' -> price.db
+    - bind_key=None -> main database
+    - bind_key='price' -> price database
+    - bind_key='supplier' -> supplier database
+    
+    Works with both local SQLite and Turso Database.
     """
     if not bind_key:
         return db.engine
-    return db.engines[bind_key]
+    
+    return db.engines.get(bind_key, db.engine)
 
 
 # ---------------------------------------------------------------------------
@@ -881,34 +885,79 @@ def create_app():
     app = Flask(__name__)
     app.secret_key = os.environ.get("SECRET_KEY", "vnix-secret")
 
-    # ตรวจสอบว่าอยู่ใน Railway และมี Volume หรือไม่
-    volume_path = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
-    if volume_path:
-        # Production (Railway with Volume) - ข้อมูลจะไม่หายหลัง deploy
-        db_path = os.path.join(volume_path, "data.db")
+    # ============ DATABASE CONFIGURATION ============
+    # Check for Turso Database URLs (Production on Railway)
+    data_db_url = os.environ.get("DATA_DB_URL")
+    data_db_token = os.environ.get("DATA_DB_AUTH_TOKEN")
+    price_db_url = os.environ.get("PRICE_DB_URL")
+    price_db_token = os.environ.get("PRICE_DB_AUTH_TOKEN")
+    supplier_db_url = os.environ.get("SUPPLIER_DB_URL")
+    supplier_db_token = os.environ.get("SUPPLIER_DB_AUTH_TOKEN")
+
+    use_turso = bool(data_db_url and data_db_token)
+
+    if use_turso:
+        # ============ PRODUCTION: Turso Database ============
+        print("[DB] Using Turso Database (Production mode)")
+        
+        # Main database (data) - Turso format: sqlite+libsql://...
+        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite+{data_db_url}?secure=true"
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+            "connect_args": {"auth_token": data_db_token}
+        }
+        
+        # Note: For binds with tokens, we need to register engines after db.init_app
+        # Store Turso config for later engine registration
+        app.config["TURSO_BINDS_CONFIG"] = {
+            "price": {"url": price_db_url, "token": price_db_token} if price_db_url and price_db_token else None,
+            "supplier": {"url": supplier_db_url, "token": supplier_db_token} if supplier_db_url and supplier_db_token else None,
+        }
+        
+        # Use empty binds initially - we'll register engines after init
+        app.config["SQLALCHEMY_BINDS"] = {}
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     else:
-        # Local development
-        db_path = os.path.join(os.path.dirname(__file__), "data.db")
+        # ============ DEVELOPMENT: Local SQLite ============
+        # ตรวจสอบว่าอยู่ใน Railway และมี Volume หรือไม่
+        volume_path = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+        if volume_path:
+            # Production (Railway with Volume) - ข้อมูลจะไม่หายหลัง deploy
+            db_path = os.path.join(volume_path, "data.db")
+        else:
+            # Local development
+            db_path = os.path.join(os.path.dirname(__file__), "data.db")
 
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    # Price DB (bind: price) + Supplier Stock DB (bind: supplier)
-    # Store on Railway Volume if available
-    binds = dict(app.config.get("SQLALCHEMY_BINDS") or {})
+        # Price DB (bind: price) + Supplier Stock DB (bind: supplier)
+        # Store on Railway Volume if available
+        binds = dict(app.config.get("SQLALCHEMY_BINDS") or {})
 
-    if volume_path:
-        price_db_path = os.path.join(volume_path, "price.db")
-        supplier_db_path = os.path.join(volume_path, "supplier_stock.db")
-    else:
-        price_db_path = os.path.join(os.path.dirname(__file__), "price.db")
-        supplier_db_path = os.path.join(os.path.dirname(__file__), "supplier_stock.db")
+        if volume_path:
+            price_db_path = os.path.join(volume_path, "price.db")
+            supplier_db_path = os.path.join(volume_path, "supplier_stock.db")
+        else:
+            price_db_path = os.path.join(os.path.dirname(__file__), "price.db")
+            supplier_db_path = os.path.join(os.path.dirname(__file__), "supplier_stock.db")
 
-    binds.setdefault("price", f"sqlite:///{price_db_path}")
-    binds.setdefault("supplier", f"sqlite:///{supplier_db_path}")
-    app.config["SQLALCHEMY_BINDS"] = binds
+        binds.setdefault("price", f"sqlite:///{price_db_path}")
+        binds.setdefault("supplier", f"sqlite:///{supplier_db_path}")
+        app.config["SQLALCHEMY_BINDS"] = binds
 
     db.init_app(app)
+    
+    # ============ TURSO: Register bind engines with auth tokens ============
+    if use_turso:
+        from sqlalchemy import create_engine
+        turso_config = app.config.get("TURSO_BINDS_CONFIG", {})
+        
+        for bind_key, cfg in turso_config.items():
+            if cfg and cfg.get("url") and cfg.get("token"):
+                url = f"sqlite+{cfg['url']}?secure=true"
+                engine = create_engine(url, connect_args={"auth_token": cfg["token"]})
+                db.engines[bind_key] = engine
+                print(f"[DB] Registered Turso bind: {bind_key}")
 
     # =========[ NEW ]=========
     # Model: ออเดอร์ที่ถูกทำเป็น "ยกเลิก"
