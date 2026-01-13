@@ -947,17 +947,7 @@ def create_app():
 
     db.init_app(app)
     
-    # ============ TURSO: Register bind engines with auth tokens ============
-    if use_turso:
-        from sqlalchemy import create_engine
-        turso_config = app.config.get("TURSO_BINDS_CONFIG", {})
-        
-        for bind_key, cfg in turso_config.items():
-            if cfg and cfg.get("url") and cfg.get("token"):
-                url = f"sqlite+{cfg['url']}?secure=true"
-                engine = create_engine(url, connect_args={"auth_token": cfg["token"]})
-                db.engines[bind_key] = engine
-                print(f"[DB] Registered Turso bind: {bind_key}")
+    # Note: Turso bind engines will be registered inside app.app_context() below
 
     # =========[ NEW ]=========
     # Model: ออเดอร์ที่ถูกทำเป็น "ยกเลิก"
@@ -1262,6 +1252,17 @@ def create_app():
     # =========[ /NEW ]=========
 
     with app.app_context():
+        # ============ TURSO: Register bind engines with auth tokens ============
+        turso_config = app.config.get("TURSO_BINDS_CONFIG", {})
+        if turso_config:
+            from sqlalchemy import create_engine as sa_create_engine
+            for bind_key, cfg in turso_config.items():
+                if cfg and cfg.get("url") and cfg.get("token"):
+                    url = f"sqlite+{cfg['url']}?secure=true"
+                    engine = sa_create_engine(url, connect_args={"auth_token": cfg["token"]})
+                    db.engines[bind_key] = engine
+                    print(f"[DB] Registered Turso bind: {bind_key}")
+        
         db.create_all(bind_key="__all__")
 
         # ---- Price DB auto-migrate (SQLite): ensure new columns exist ----
