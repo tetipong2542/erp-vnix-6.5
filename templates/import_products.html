@@ -1,0 +1,148 @@
+
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+  <div>
+    <div class="page-title d-flex align-items-center">
+      <div class="page-title-icon me-3">🏷️</div>
+      <div class="d-flex align-items-baseline flex-wrap">
+        <div class="page-title-main me-3">นำเข้า: สินค้า</div>
+        <div class="text-muted" style="font-size: 1rem; border-left: 2px solid #ccc; padding-left: 12px;">
+          Product Master
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4 justify-content-start">
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);">
+      <div class="card-body">
+        <div class="text-primary small fw-bold text-uppercase mb-2">
+          <i class="bi bi-box-seam-fill me-1"></i> SKU ทั้งหมด (Total SKUs)
+        </div>
+        <div class="d-flex align-items-center justify-content-between">
+          <h2 class="mb-0 fw-bold text-primary">{{ total_skus }}</h2>
+          <i class="bi bi-list-ul text-primary opacity-25 fs-1"></i>
+        </div>
+        <small class="text-primary opacity-75">รายการสินค้าในระบบ</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-header bg-white pt-3 pb-0 border-bottom-0">
+    <ul class="nav nav-tabs card-header-tabs" id="importTab" role="tablist">
+      <li class="nav-item">
+        <button class="nav-link active fw-bold text-primary" id="file-tab" data-bs-toggle="tab" data-bs-target="#tab-file" type="button">
+          <i class="bi bi-file-earmark-excel me-2"></i>อัปโหลดไฟล์
+        </button>
+      </li>
+      <li class="nav-item" style="display: none;">
+        <button class="nav-link fw-bold text-success" id="gsheet-tab" data-bs-toggle="tab" data-bs-target="#tab-gsheet" type="button">
+          <i class="bi bi-google me-2"></i>Google Sheet
+        </button>
+      </li>
+    </ul>
+  </div>
+
+  <div class="card-body bg-light">
+    <div class="tab-content">
+
+      <div class="tab-pane fade show active" id="tab-file">
+        <form method="post" enctype="multipart/form-data">
+          <input type="hidden" name="mode" value="file">
+          <div class="row align-items-end g-3">
+            <div class="col-md-9">
+              <label class="form-label small text-muted">เลือกไฟล์ Excel (.xlsx, .xls)</label>
+              <input class="form-control" type="file" name="file" accept=".xlsx,.xls" required>
+            </div>
+            <div class="col-md-3">
+              <button type="submit" class="btn btn-primary w-100"><i class="bi bi-cloud-upload me-1"></i> นำเข้าไฟล์</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="tab-pane fade" id="tab-gsheet">
+        <form method="post">
+          <input type="hidden" name="mode" value="gsheet">
+
+          <div class="row align-items-end g-3">
+            <div class="col-md-9">
+              <label class="form-label small text-muted">Google Sheet URL</label>
+
+              <div class="input-group">
+                <input type="url" class="form-control" id="products_sheet_url" name="sheet_url"
+                       placeholder="https://docs.google.com/spreadsheets/d/..."
+                       value="{{ saved_url }}" required>
+
+                <button class="btn btn-outline-secondary" type="button" onclick="saveProductsUrl('save')" title="บันทึกลิงก์นี้ถาวร">
+                  <i class="bi bi-save"></i> บันทึก
+                </button>
+                <button class="btn btn-outline-danger" type="button" onclick="saveProductsUrl('delete')" title="ลบลิงก์ออก">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+              <div class="form-text mt-1" id="url-msg"></div>
+            </div>
+
+            <div class="col-md-3">
+              <button type="submit" class="btn btn-success w-100 fw-bold">
+                <i class="bi bi-cloud-download-fill me-1"></i> ดึงข้อมูล
+              </button>
+            </div>
+          </div>
+
+          <div class="form-text mt-2 text-success">
+            <i class="bi bi-check-circle-fill"></i> ระบบจะค้นหา Tab ชื่อ <strong>"Import_product_master"</strong>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+function saveProductsUrl(action) {
+    const urlInput = document.getElementById('products_sheet_url');
+    const msgDiv = document.getElementById('url-msg');
+    const urlVal = urlInput.value.trim();
+
+    if (action === 'save' && !urlVal) {
+        alert('กรุณากรอก URL ก่อนกดบันทึก');
+        return;
+    }
+    if (action === 'delete' && !confirm('ต้องการลบลิงก์ที่บันทึกไว้ใช่หรือไม่?')) {
+        return;
+    }
+
+    fetch("{{ url_for('api_shop_url') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            platform: "PRODUCTS_SYSTEM",
+            shop_name: "GoogleSheet_Products",
+            url: urlVal,
+            action: action
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            msgDiv.innerHTML = `<span class="text-${action==='save'?'success':'danger'} fw-bold"><i class="bi bi-check-circle"></i> ${data.msg}</span>`;
+            if (action === 'delete') urlInput.value = "";
+            setTimeout(() => { msgDiv.innerHTML = ""; }, 3000);
+        } else {
+            alert("Error: " + data.msg);
+        }
+    })
+    .catch(error => { console.error('Error:', error); alert('เกิดข้อผิดพลาดในการเชื่อมต่อ'); });
+}
+</script>
+
+{% endblock %}

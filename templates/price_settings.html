@@ -1,0 +1,850 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+  .price-settings-page-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .price-settings-title-wrap {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .price-settings-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(var(--bs-primary-rgb), 0.10);
+    color: var(--bs-primary);
+    font-size: 18px;
+    flex: 0 0 auto;
+  }
+
+  .price-settings-hint {
+    font-size: 0.9rem;
+    color: var(--bs-secondary-color);
+  }
+
+  .price-settings-table thead th {
+    font-weight: 600;
+  }
+
+  .price-settings-table tbody tr:hover {
+    background: var(--bs-tertiary-bg);
+  }
+
+  .price-settings-table {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  .price-settings-table input[type="number"]{
+    font-variant-numeric: tabular-nums;
+  }
+
+  .price-settings-table col.col-platform {
+    width: 24%;
+  }
+
+  .price-settings-table col.col-label {
+    width: 23%;
+  }
+
+  .price-settings-table col.col-active {
+    width: 10%;
+  }
+
+  .price-settings-table col.col-sort {
+    width: 10%;
+  }
+
+  .price-settings-table col.col-fee {
+    width: 14%;
+  }
+
+  .price-settings-table col.col-fixed {
+    width: 19%;
+  }
+
+  .price-settings-cell {
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  .price-settings-sticky-actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--bs-body-bg);
+    padding-top: 12px;
+    margin-top: 12px;
+    border-top: var(--bs-border-width) solid var(--bs-border-color);
+  }
+
+  .price-settings-input-addon {
+    background: var(--bs-tertiary-bg);
+  }
+
+  .price-settings-input-group {
+    width: 150px;
+    max-width: 100%;
+  }
+
+  .price-settings-input-group-fixed {
+    width: 220px;
+    max-width: 100%;
+  }
+
+  @media (max-width: 768px) {
+    .price-settings-input-group,
+    .price-settings-input-group-fixed {
+      width: 100%;
+    }
+  }
+
+  /* ===== Owner by Brand Modern ===== */
+  .owner-card-head{
+    display:flex;
+    gap:12px;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    margin-bottom: 10px;
+  }
+  .owner-filters{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  .owner-table-wrap{
+    max-height: 60vh;
+    overflow: auto;
+    border-radius: 14px;
+    border: 1px solid var(--bs-border-color);
+  }
+  .owner-table{
+    margin: 0;
+    width: 100%;
+  }
+  .owner-table thead th{
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bs-body-bg);
+    border-bottom: var(--bs-border-width) solid var(--bs-border-color);
+    font-weight: 700;
+  }
+  .owner-table tbody tr:hover{
+    background: var(--bs-tertiary-bg);
+  }
+  .owner-value{
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .owner-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(var(--bs-primary-rgb), .08);
+    color: var(--bs-primary);
+    font-size: .85rem;
+  }
+
+  .owner-sortable{
+    cursor: pointer;
+    user-select: none;
+  }
+  .owner-sortable:hover{
+    background: var(--bs-tertiary-bg);
+  }
+  .owner-sort-ind{
+    font-size: .85em;
+    opacity: .65;
+    margin-left: 6px;
+  }
+
+  /* ===== Modern Export Settings (New) ===== */
+  .settings-section-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--bs-secondary-color);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .modern-setting-card {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color-translucent);
+    border-radius: 16px;
+    padding: 20px;
+    height: 100%;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .modern-setting-card:hover {
+    border-color: var(--bs-primary);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    transform: translateY(-2px);
+  }
+
+  .ms-icon-wrap {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    margin-bottom: 12px;
+  }
+
+  /* Color Themes */
+  .theme-blue .ms-icon-wrap { background: rgba(13, 110, 253, 0.1); color: #0d6efd; }
+  .theme-green .ms-icon-wrap { background: rgba(25, 135, 84, 0.1); color: #198754; }
+  .theme-yellow .ms-icon-wrap { background: rgba(255, 193, 7, 0.15); color: #ffc107; }
+  .theme-orange .ms-icon-wrap { background: rgba(253, 126, 20, 0.15); color: #fd7e14; }
+  .theme-red .ms-icon-wrap { background: rgba(220, 53, 69, 0.15); color: #dc3545; }
+
+  .ms-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--bs-heading-color);
+    margin-bottom: 4px;
+  }
+
+  .ms-desc {
+    font-size: 0.75rem;
+    color: var(--bs-secondary-color);
+    margin-bottom: 12px;
+    min-height: 2.4em;
+    line-height: 1.3;
+  }
+
+  .ms-input-wrap {
+    display: flex;
+    align-items: center;
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 8px;
+    padding: 0 12px;
+    transition: all 0.2s;
+    overflow: hidden;
+  }
+
+  .ms-input-wrap:focus-within {
+    background: var(--bs-body-bg);
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb), 0.15);
+  }
+
+  .ms-input-wrap input {
+    border: none;
+    background: transparent;
+    width: 100%;
+    flex: 1;
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    padding: 8px 0;
+    outline: none;
+    text-align: center;
+    color: var(--bs-heading-color);
+  }
+
+  .ms-unit {
+    position: static;
+    margin-left: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+    flex-shrink: 0;
+    pointer-events: none;
+  }
+
+  /* ซ่อนลูกศรขึ้นลงใน Input Number เพื่อความสวยงามและไม่กินที่ */
+  .ms-input-wrap input::-webkit-outer-spin-button,
+  .ms-input-wrap input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .ms-input-wrap input[type=number] {
+    appearance: textfield;
+    -webkit-appearance: textfield;
+    -moz-appearance: textfield;
+  }
+</style>
+
+<div class="price-settings-page-head">
+  <div class="price-settings-title-wrap">
+    <div class="price-settings-icon">⚙️</div>
+    <div>
+      <div class="fw-bold" style="font-size: 1.15rem;">Price Marketing: Settings</div>
+      <div class="price-settings-hint">ตั้งค่าค่าธรรมเนียมแพลตฟอร์มสำหรับคำนวณกำไร (กรอกเป็น “รวม VAT แล้ว”)</div>
+    </div>
+  </div>
+
+  <a class="btn btn-outline-secondary" href="{{ url_for('price_dashboard') }}">
+    <i class="bi bi-arrow-left"></i> กลับ Dashboard
+  </a>
+</div>
+
+<div class="alert alert-info d-flex align-items-start gap-2 mx-auto" role="alert" style="border-radius: 14px; max-width: 960px;">
+  <div style="font-size: 18px; line-height: 1;">ℹ️</div>
+  <div>
+    <div class="fw-semibold">หมายเหตุการกรอกค่า</div>
+    <div class="small">
+      ช่อง <b>Fee (%)</b> ให้กรอกเป็น “เปอร์เซ็นต์ที่รวม VAT แล้ว” ตามที่ต้องการใช้ในระบบ (เช่น 16.05 แทน 15 ถ้าต้องรวม VAT)
+      และ <b>Fixed fee</b> คือ “บาท/ชิ้น” (ถ้ามี)
+    </div>
+    <div class="small mt-1">ตัวอย่าง: ขาย 100 บาท, Fee 3% → ค่าธรรมเนียม = 3 บาท (เพราะกรอกเป็นตัวรวม VAT แล้ว)</div>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0 mx-auto" style="border-radius: 16px; max-width: 960px;">
+  <div class="card-body">
+    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+      <div class="input-group" style="max-width: 360px;">
+        <span class="input-group-text">🔎</span>
+        <input id="platformSearch" type="text" class="form-control" placeholder="ค้นหาแพลตฟอร์ม...">
+      </div>
+
+      <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addPlatformModal">
+        ➕ เพิ่มแพลตฟอร์ม
+      </button>
+    </div>
+
+    <form method="post">
+      <div class="table-responsive">
+        <table class="table align-middle price-settings-table">
+          <colgroup>
+            <col class="col-platform">
+            <col class="col-label">
+            <col class="col-active">
+            <col class="col-sort">
+            <col class="col-fee">
+            <col class="col-fixed">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>แพลตฟอร์ม</th>
+              <th>ชื่อแสดงผล</th>
+              <th class="text-center">Active</th>
+              <th class="text-end">Sort</th>
+              <th>Fee (%) <span class="badge bg-primary-subtle text-primary ms-2">รวม VAT แล้ว</span></th>
+              <th>Fixed fee (บาท/ชิ้น)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for key, label in platforms %}
+              {% set s = settings.get(key) %}
+              <tr>
+                <td>
+                  <div class="fw-bold">{{ label }}</div>
+                  <div class="price-settings-hint">ใช้ในการคำนวณ Profit ใน Dashboard</div>
+                </td>
+
+                <td>
+                  <input
+                    type="text"
+                    class="form-control"
+                    name="label_{{ key }}"
+                    value="{{ (s.label if s and s.label else label) }}"
+                    placeholder="เช่น Shopee (TH)"
+                  >
+                </td>
+
+                <td class="text-center">
+                  <div class="form-check form-switch d-inline-flex align-items-center">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      name="active_{{ key }}"
+                      {% if (s and (s.is_active is not defined or s.is_active)) %}checked{% endif %}
+                    >
+                  </div>
+                </td>
+
+                <td>
+                  <input
+                    type="number"
+                    class="form-control text-end"
+                    name="sort_{{ key }}"
+                    value="{{ (s.sort_order if s and s.sort_order is not none else 0) }}"
+                    step="1"
+                  >
+                </td>
+
+                <td>
+                  <div class="price-settings-cell">
+                    <div class="input-group price-settings-input-group">
+                      <input
+                        type="number"
+                        class="form-control text-end"
+                        name="fee_pct_{{ key }}"
+                        value="{{ (s.fee_pct if s else 0) }}"
+                        step="0.01" min="0" max="100"
+                        inputmode="decimal"
+                        placeholder="0.00"
+                      >
+                      <span class="input-group-text price-settings-input-addon">%</span>
+                    </div>
+                  </div>
+                </td>
+
+                <td>
+                  <div class="price-settings-cell">
+                    <div class="input-group price-settings-input-group price-settings-input-group-fixed">
+                      <input
+                        type="number"
+                        class="form-control text-end"
+                        name="fixed_fee_{{ key }}"
+                        value="{{ (s.fixed_fee if s else 0) }}"
+                        step="0.01" min="0"
+                        inputmode="decimal"
+                        placeholder="0.00"
+                      >
+                      <span class="input-group-text price-settings-input-addon">บาท/ชิ้น</span>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="price-settings-sticky-actions d-flex justify-content-end">
+        <button type="submit" class="btn btn-primary px-4" style="border-radius: 12px;">
+          <i class="bi bi-save"></i> บันทึก
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0 mx-auto mt-4" style="border-radius: 16px; max-width: 960px;">
+  <div class="card-body p-4">
+    <div class="d-flex align-items-center gap-3 mb-4">
+      <div class="price-settings-icon" style="background: rgba(13, 202, 240, 0.1); color: #0dcaf0;">🚀</div>
+      <div>
+        <div class="fw-bold" style="font-size: 1.15rem;">Export Price: Settings</div>
+        <div class="price-settings-hint">กำหนดสูตรคำนวณราคาขาย (Sell 1..5) และลิมิตการขาดทุนตามอายุสินค้า</div>
+      </div>
+    </div>
+
+    <form method="post" action="{{ url_for('price_settings_export_price') }}">
+      
+      <div class="row g-4">
+        <div class="col-12 col-lg-5">
+          <div class="settings-section-title">
+            <i class="bi bi-graph-up-arrow"></i> Pricing Strategy
+          </div>
+          <div class="row g-3">
+            <div class="col-6">
+              <div class="modern-setting-card theme-blue">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div class="ms-icon-wrap"><i class="bi bi-layers"></i></div>
+                </div>
+                <div class="ms-label">Step Price</div>
+                <div class="ms-desc">ลดราคาแบบขั้นบันได<br>(Our → Sell1 → Sell2)</div>
+                <div class="ms-input-wrap">
+                  <input type="number" step="0.1" min="0" max="10" name="step_pct" value="{{ (export_setting.step_pct if export_setting else 5.0) }}">
+                  <span class="ms-unit">%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6">
+              <div class="modern-setting-card theme-green">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div class="ms-icon-wrap"><i class="bi bi-shield-check"></i></div>
+                </div>
+                <div class="ms-label">Min Profit</div>
+                <div class="ms-desc">กันขาดทุนขั้นต่ำ<br>(Cost + %)</div>
+                <div class="ms-input-wrap">
+                  <input type="number" step="0.1" min="0" max="10" name="min_profit_pct" value="{{ (export_setting.min_profit_pct if export_setting else 5.0) }}">
+                  <span class="ms-unit">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-1 d-none d-lg-flex justify-content-center">
+          <div style="width: 1px; background: var(--bs-border-color); height: 100%;"></div>
+        </div>
+
+        <div class="col-12 col-lg-6">
+          <div class="settings-section-title">
+            <i class="bi bi-hourglass-split"></i> Aging Clearance Policy (Max Loss)
+          </div>
+          <div class="row g-3">
+            <div class="col-4">
+              <div class="modern-setting-card theme-yellow">
+                <div class="ms-icon-wrap"><i class="bi bi-exclamation-circle"></i></div>
+                <div class="ms-label">3 Months</div>
+                <div class="ms-desc">ยอมขาดทุนได้ไม่เกิน</div>
+                <div class="ms-input-wrap">
+                  <input type="number" step="0.1" min="0" max="50" name="loss_aging3_pct" value="{{ (export_setting.loss_aging3_pct if export_setting else 5.0) }}">
+                  <span class="ms-unit">%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-4">
+              <div class="modern-setting-card theme-orange">
+                <div class="ms-icon-wrap"><i class="bi bi-exclamation-triangle"></i></div>
+                <div class="ms-label">6 Months</div>
+                <div class="ms-desc">สินค้าเริ่มเก่า ยอมลบ</div>
+                <div class="ms-input-wrap">
+                  <input type="number" step="0.1" min="0" max="50" name="loss_aging6_pct" value="{{ (export_setting.loss_aging6_pct if export_setting else 10.0) }}">
+                  <span class="ms-unit">%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-4">
+              <div class="modern-setting-card theme-red">
+                <div class="ms-icon-wrap"><i class="bi bi-fire"></i></div>
+                <div class="ms-label">1 Year+</div>
+                <div class="ms-desc">Dead Stock ยอมลบ</div>
+                <div class="ms-input-wrap">
+                  <input type="number" step="0.1" min="0" max="50" name="loss_aging12_pct" value="{{ (export_setting.loss_aging12_pct if export_setting else 20.0) }}">
+                  <span class="ms-unit">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end mt-4 pt-2 border-top">
+        <button type="submit" class="btn btn-primary px-4 py-2" style="border-radius: 12px; font-weight: 600;">
+          <i class="bi bi-save me-1"></i> บันทึก Export Price
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0 mx-auto mt-4" style="border-radius: 16px; max-width: 960px;">
+  <div class="card-body">
+    <div class="owner-card-head">
+      <div>
+        <div class="fw-bold" style="font-size: 1.05rem;">ผู้ดูแลสินค้า (Owner by Brand)</div>
+        <div class="price-settings-hint">ผูก Brand → ผู้ดูแล เพื่อแสดง/กรองใน Dashboard Price Marketing</div>
+        <div class="mt-1 d-flex gap-2 flex-wrap">
+          <span class="owner-chip">📌 มีทั้งหมด <span id="ownerRowCount">{{ (brands or [])|length }}</span> Brand</span>
+          <span class="owner-chip">📦 SKU ทั้งหมด <span id="ownerSkuTotal">{{ total_sku_instock or 0 }}</span></span>
+        </div>
+      </div>
+
+      <div class="owner-filters">
+        <div class="input-group" style="max-width: 280px;">
+          <span class="input-group-text">🔎</span>
+          <input id="ownerSearch" type="text" class="form-control" placeholder="ค้นหา Brand หรือผู้ดูแล...">
+        </div>
+
+        <select id="ownerFilter" class="form-select" style="max-width: 220px;">
+          <option value="">ผู้ดูแล: ทั้งหมด</option>
+          {% for o in owners_list or [] %}
+            <option value="{{ o }}">{{ o }}</option>
+          {% endfor %}
+          <option value="__EMPTY__">ยังไม่กำหนดผู้ดูแล</option>
+        </select>
+
+        <button type="button" class="btn btn-outline-secondary" id="ownerClearBtn">ล้างฟิลเตอร์</button>
+        <button type="button" class="btn btn-outline-secondary" id="ownerResetSortBtn">รีเซ็ตเรียง</button>
+      </div>
+    </div>
+
+    <form method="post" action="{{ url_for('price_settings_brand_owners') }}">
+      <div class="owner-table-wrap">
+        <div class="table-responsive">
+          <table class="table align-middle owner-table">
+            <thead>
+              <tr>
+                <th class="owner-sortable" data-sort="brand">Brand <span class="owner-sort-ind"></span></th>
+                <th class="text-end owner-sortable" data-sort="monthly">ยอดขาย/เดือน <span class="owner-sort-ind"></span></th>
+                <th class="text-end owner-sortable" data-sort="sku">SKU <span class="owner-sort-ind"></span></th>
+                <th class="owner-sortable" data-sort="owner" style="width: 360px;">ผู้ดูแล <span class="owner-sort-ind"></span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for b in brands or [] %}
+                {% set mv = (brand_monthly_value_map.get(b, 0) if brand_monthly_value_map else 0) %}
+                {% set sc = (brand_sku_count_map.get(b, 0) if brand_sku_count_map else 0) %}
+                <tr class="owner-row" data-brand="{{ b|e }}">
+                  <td class="fw-semibold">{{ b }}</td>
+
+                  <td class="owner-value" data-monthly="{{ mv }}">
+                    ฿ {{ "{:,.0f}".format(mv or 0) }}
+                  </td>
+
+                  <td class="owner-value" data-sku="{{ sc }}">
+                    {{ "{:,.0f}".format(sc or 0) }}
+                  </td>
+
+                  <td>
+                    <input type="hidden" name="brand" value="{{ b }}">
+                    <input
+                      class="form-control owner-input"
+                      name="owner"
+                      value="{{ owner_map.get(b, '') if owner_map else '' }}"
+                      placeholder="เช่น admin หรือชื่อพนักงาน"
+                    >
+                  </td>
+                </tr>
+              {% endfor %}
+
+              {% if (brands or [])|length == 0 %}
+                <tr>
+                  <td colspan="4" class="text-center text-muted py-4">
+                    ยังไม่พบ Brand ในระบบ (โปรด Import ข้อมูลฝั่งเรา / Brand Control ก่อน)
+                  </td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end">
+        <button type="submit" class="btn btn-primary" style="border-radius: 12px;">
+          <i class="bi bi-save"></i> บันทึกผู้ดูแล
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal fade" id="addPlatformModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="{{ url_for('price_settings_add_platform') }}">
+      <div class="modal-header">
+        <h5 class="modal-title">เพิ่มแพลตฟอร์ม</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label">Platform Key (ใช้เป็นรหัส)</label>
+          <input name="new_platform_key" class="form-control" placeholder="เช่น JD_Central" required>
+          <div class="form-text">แนะนำใช้ A-Z, 0-9, underscore (_) ไม่มีเว้นวรรค</div>
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label">ชื่อแสดงผล</label>
+          <input name="new_platform_label" class="form-control" placeholder="เช่น JD Central">
+        </div>
+
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label">Fee (%)</label>
+            <input name="new_fee_pct" type="number" class="form-control text-end" step="0.01" min="0" max="100" value="0">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Fixed fee</label>
+            <input name="new_fixed_fee" type="number" class="form-control text-end" step="0.01" min="0" value="0">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">ยกเลิก</button>
+        <button class="btn btn-primary" type="submit">บันทึก</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function(){
+    const input = document.getElementById('platformSearch');
+    if(!input) return;
+
+    input.addEventListener('input', function(){
+      const q = (this.value || '').toLowerCase().trim();
+      document.querySelectorAll('table.price-settings-table tbody tr').forEach(tr => {
+        const text = tr.innerText.toLowerCase();
+        tr.style.display = text.includes(q) ? '' : 'none';
+      });
+    });
+  })();
+</script>
+
+<script>
+  (function(){
+    const searchEl = document.getElementById('ownerSearch');
+    const filterEl = document.getElementById('ownerFilter');
+    const clearBtn = document.getElementById('ownerClearBtn');
+    const countEl = document.getElementById('ownerRowCount');
+
+    if (!searchEl && !filterEl) return;
+
+    function applyOwnerFilter(){
+      const q = (searchEl?.value || '').toLowerCase().trim();
+      const ownerSel = (filterEl?.value || '').toLowerCase().trim();
+
+      let shown = 0;
+      document.querySelectorAll('tr.owner-row').forEach(tr => {
+        const brand = (tr.getAttribute('data-brand') || '').toLowerCase();
+        const ownerInput = tr.querySelector('input.owner-input');
+        const ownerVal = ((ownerInput?.value || '') + '').toLowerCase().trim();
+
+        let ok = true;
+
+        // ค้นหา brand หรือ owner
+        if (q) {
+          ok = brand.includes(q) || ownerVal.includes(q);
+        }
+
+        // ฟิลเตอร์ผู้ดูแล
+        if (ok && ownerSel) {
+          if (ownerSel === '__empty__') {
+            ok = !ownerVal;
+          } else {
+            ok = ownerVal === ownerSel;
+          }
+        }
+
+        tr.style.display = ok ? '' : 'none';
+        if (ok) shown += 1;
+      });
+
+      if (countEl) countEl.textContent = shown;
+    }
+
+    searchEl?.addEventListener('input', applyOwnerFilter);
+    filterEl?.addEventListener('change', applyOwnerFilter);
+
+    clearBtn?.addEventListener('click', function(){
+      if (searchEl) searchEl.value = '';
+      if (filterEl) filterEl.value = '';
+      applyOwnerFilter();
+    });
+
+    applyOwnerFilter();
+  })();
+</script>
+
+<script>
+  (function(){
+    const tbody = document.querySelector('.owner-table tbody');
+    if(!tbody) return;
+
+    const STORAGE_KEY = 'pm_owner_sort_v1';
+
+    const resetBtn = document.getElementById('ownerResetSortBtn');
+
+    let sortKey = 'brand';
+    let sortDir = 'asc';
+
+    // โหลดค่าที่จำไว้
+    try{
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if(saved && typeof saved === 'object'){
+        if(saved.sortKey) sortKey = saved.sortKey;
+        if(saved.sortDir) sortDir = saved.sortDir;
+      }
+    }catch(e){}
+
+    function saveSort(){
+      try{
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ sortKey, sortDir }));
+      }catch(e){}
+    }
+
+    function getRowVal(tr, key){
+      if(key === 'brand'){
+        return (tr.getAttribute('data-brand') || '').toLowerCase();
+      }
+      if(key === 'monthly'){
+        const td = tr.querySelector('td[data-monthly]');
+        return parseFloat(td?.getAttribute('data-monthly') || '0') || 0;
+      }
+      if(key === 'sku'){
+        const td = tr.querySelector('td[data-sku]');
+        return parseFloat(td?.getAttribute('data-sku') || '0') || 0;
+      }
+      if(key === 'owner'){
+        const inp = tr.querySelector('input.owner-input');
+        return (inp?.value || '').toLowerCase().trim();
+      }
+      return '';
+    }
+
+    function updateIndicator(){
+      document.querySelectorAll('.owner-sort-ind').forEach(el => el.textContent = '');
+      const ind = document.querySelector(`.owner-sortable[data-sort="${sortKey}"] .owner-sort-ind`);
+      if(ind) ind.textContent = (sortDir === 'asc') ? '▲' : '▼';
+    }
+
+    function sortRows(){
+      const rows = Array.from(tbody.querySelectorAll('tr.owner-row'));
+      rows.sort((a,b) => {
+        const va = getRowVal(a, sortKey);
+        const vb = getRowVal(b, sortKey);
+
+        if(sortKey === 'monthly' || sortKey === 'sku'){
+          return (sortDir === 'asc') ? (va - vb) : (vb - va);
+        }
+
+        if(va < vb) return (sortDir === 'asc') ? -1 : 1;
+        if(va > vb) return (sortDir === 'asc') ? 1 : -1;
+        return 0;
+      });
+
+      rows.forEach(r => tbody.appendChild(r));
+    }
+
+    function applySort(newKey){
+      if(sortKey === newKey){
+        sortDir = (sortDir === 'asc') ? 'desc' : 'asc';
+      }else{
+        sortKey = newKey;
+        sortDir = 'asc';
+      }
+
+      updateIndicator();
+      sortRows();
+      saveSort();
+    }
+
+    resetBtn?.addEventListener('click', () => {
+      try{
+        localStorage.removeItem(STORAGE_KEY);
+      }catch(e){}
+      sortKey = 'brand';
+      sortDir = 'asc';
+      updateIndicator();
+      sortRows();
+    });
+
+    document.querySelectorAll('.owner-sortable').forEach(th => {
+      th.addEventListener('click', () => applySort(th.getAttribute('data-sort')));
+    });
+
+    // ตอนเปิดหน้า: ใช้ค่าที่จำไว้ แล้ว sort ทันที
+    updateIndicator();
+    sortRows();
+  })();
+</script>
+{% endblock %}

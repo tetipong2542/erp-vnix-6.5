@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <div class="page-title-main">🏪 จัดการรายชื่อร้าน</div>
+    <div class="text-muted">ติ๊กหลายร้าน → เลือก Master → รวมชื่อให้เหลืออันเดียว</div>
+  </div>
+  <button class="btn btn-primary" id="btnMerge" disabled>
+    รวมเป็น Master
+  </button>
+</div>
+
+<form method="post" action="{{ url_for('admin_shops_merge') }}" id="mergeForm"
+      onsubmit="return confirm('ยืนยันรวมร้านเป็น Master? ระบบจะย้ายออเดอร์ไป Master และลบร้านลูก');">
+  <input type="hidden" name="master_id" id="masterId">
+  <div id="mergeShopIds"></div>
+</form>
+
+<div class="table-responsive">
+  <table class="table table-bordered table-striped align-middle">
+    <thead class="table-light">
+      <tr>
+        <th style="width:40px;"></th>
+        <th style="width:40px;">M</th>
+        <th style="width:60px;">#</th>
+        <th>แพลตฟอร์ม</th>
+        <th>ชื่อร้าน</th>
+        <th class="text-center" style="width:120px;"># ออเดอร์</th>
+        <th style="width:140px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in shops %}
+      <tr>
+        <td class="text-center">
+          <input type="checkbox" class="rowchk" value="{{ s.id }}">
+        </td>
+        <td class="text-center">
+          <input type="radio" class="rowmaster" name="masterPick" value="{{ s.id }}">
+        </td>
+        <td>{{ loop.index }}</td>
+        <td>{{ s.platform }}</td>
+        <td class="fw-bold">{{ s.name }}</td>
+        <td class="text-center">{{ counts.get(s.id, 0) }}</td>
+        <td>
+          <form method="post" action="{{ url_for('delete_shop', shop_id=s.id) }}"
+                onsubmit="return confirm('ยืนยันลบร้าน {{ s.name }} ? ข้อมูลออเดอร์จะไม่ถูกลบ');">
+            <button class="btn btn-sm btn-outline-danger"
+                    {% if counts.get(s.id,0)>0 %}disabled title="มีออเดอร์ผูกอยู่ ไม่สามารถลบ"{% endif %}>
+              ลบชื่อร้าน
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+(function(){
+  const btn = document.getElementById('btnMerge');
+  const form = document.getElementById('mergeForm');
+  const masterId = document.getElementById('masterId');
+  const holder = document.getElementById('mergeShopIds');
+
+  function refresh(){
+    const checked = Array.from(document.querySelectorAll('.rowchk:checked')).map(x => x.value);
+    const m = document.querySelector('.rowmaster:checked');
+    btn.disabled = !(checked.length >= 2 && m);
+    masterId.value = m ? m.value : '';
+
+    // rebuild hidden inputs
+    holder.innerHTML = '';
+    checked.forEach(id => {
+      const inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = 'shop_ids';
+      inp.value = id;
+      holder.appendChild(inp);
+    });
+  }
+
+  document.querySelectorAll('.rowchk').forEach(x => x.addEventListener('change', refresh));
+  document.querySelectorAll('.rowmaster').forEach(r => {
+    r.addEventListener('change', () => {
+      const tr = r.closest('tr');
+      const chk = tr.querySelector('.rowchk');
+      if (chk) chk.checked = true;
+      refresh();
+    });
+  });
+
+  btn.addEventListener('click', () => form.requestSubmit());
+  refresh();
+})();
+</script>
+{% endblock %}

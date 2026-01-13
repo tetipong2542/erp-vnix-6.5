@@ -1,0 +1,358 @@
+{# templates/import_brand_control.html #}
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+  .import-page-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .import-title-wrap {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .import-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(var(--bs-primary-rgb), .12);
+    color: var(--bs-primary);
+    flex: 0 0 auto;
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .import-subtitle {
+    color: var(--bs-secondary-color);
+    margin: 2px 0 0 0;
+    font-size: 0.95rem;
+  }
+  .hint-box {
+    background: rgba(var(--bs-warning-rgb), .08);
+    border: 1px solid rgba(var(--bs-warning-rgb), .22);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: .9rem;
+  }
+</style>
+
+<div class="import-page-head">
+  <div class="import-title-wrap">
+    <div class="import-icon">BC</div>
+    <div>
+      <h4 class="mb-0">Import Brand Control</h4>
+      <p class="import-subtitle mb-0">
+        นำเข้าราคาควบคุมโดยแบรนด์ (Brand Control / MAP) เพื่อใช้เทียบใน Dashboard Price Marketing
+      </p>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary"
+       href="{{ url_for('download_price_brand_control_template') }}">
+      ดาวน์โหลด Template (Excel)
+    </a>
+    <a class="btn btn-outline-primary" href="{{ url_for('price_dashboard') }}">
+      กลับไปหน้า Dashboard
+    </a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <ul class="nav nav-tabs" id="importTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="file-tab" data-bs-toggle="tab" data-bs-target="#filePane"
+                    type="button" role="tab" aria-controls="filePane" aria-selected="true">
+              Import จากไฟล์ (Excel/CSV)
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="gsheet-tab" data-bs-toggle="tab" data-bs-target="#gsheetPane"
+                    type="button" role="tab" aria-controls="gsheetPane" aria-selected="false">
+              Import จาก Google Sheet
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content pt-3">
+          {# -------------------- FILE IMPORT -------------------- #}
+          <div class="tab-pane fade show active" id="filePane" role="tabpanel" aria-labelledby="file-tab">
+            <form method="POST" action="{{ url_for('import_brand_control_view') }}" enctype="multipart/form-data">
+              {% if csrf_token is defined %}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              {% endif %}
+              <input type="hidden" name="mode" value="file">
+
+              <div class="mb-3">
+                <label class="form-label fw-semibold">เลือกไฟล์</label>
+                <input class="form-control" type="file" name="file" accept=".xlsx,.xls,.csv" required>
+                <div class="form-text">
+                  รองรับ <span class="mono">.xlsx</span>, <span class="mono">.xls</span>, <span class="mono">.csv</span>
+                  (แนะนำให้ใช้ Template เพื่อกันคอลัมน์ผิด)
+                </div>
+              </div>
+
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                  นำเข้าไฟล์
+                </button>
+                <a class="btn btn-outline-secondary"
+                   href="{{ url_for('download_price_brand_control_template') }}">
+                  โหลด Template
+                </a>
+              </div>
+            </form>
+          </div>
+
+          {# -------------------- GSHEET IMPORT -------------------- #}
+          <div class="tab-pane fade" id="gsheetPane" role="tabpanel" aria-labelledby="gsheet-tab">
+            <form method="POST" action="{{ url_for('import_brand_control_view') }}">
+              {% if csrf_token is defined %}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              {% endif %}
+              <input type="hidden" name="mode" value="gsheet">
+
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Google Sheet URL</label>
+                <input id="sheetUrl" class="form-control" type="url" name="sheet_url"
+                       placeholder="วางลิงก์ Google Sheet ที่แชร์สิทธิ์ให้ระบบอ่านได้"
+                       value="{{ saved_url or '' }}" required>
+                <div class="form-text">
+                  ต้องเป็นลิงก์ไฟล์ Google Sheet (ไม่ใช่ลิงก์ชีทแบบเฉพาะเซลล์)
+                  และบัญชี Service Account/ผู้ใช้ของระบบต้องมีสิทธิ์เข้าถึง
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Worksheet (ไม่ใส่ได้)</label>
+                <input id="sheetWs" class="form-control" type="text" name="worksheet"
+                       value="{{ saved_worksheet or '' }}"
+                       placeholder="ถ้าไม่ใส่ ระบบจะใช้ชีทแรก (Sheet1)">
+                <div class="form-text">
+                  ใส่ชื่อแท็บชีทตรง ๆ เช่น <span class="mono">BrandControl</span> หรือ <span class="mono">Sheet1</span>
+                </div>
+              </div>
+
+              <div class="d-flex flex-wrap gap-2 align-items-center">
+                <button type="submit" class="btn btn-primary">
+                  นำเข้าจาก Google Sheet
+                </button>
+
+                <button type="button" class="btn btn-outline-secondary" id="btnSaveUrl">
+                  บันทึก URL นี้ไว้
+                </button>
+
+                <button type="button" class="btn btn-outline-danger" id="btnClearUrl">
+                  ล้าง URL ที่บันทึก
+                </button>
+
+                <button type="button" class="btn btn-outline-secondary" id="btnClearWorksheet">
+                  ล้างชื่อแท็บ
+                </button>
+
+                <span class="ms-1 small" id="saveStatus"></span>
+              </div>
+
+              <hr class="my-3">
+
+              <div class="hint-box">
+                <div class="fw-semibold mb-1">แนะแนวการตั้งค่า Google Sheet</div>
+                <ul class="mb-0 ps-3">
+                  <li>แถวแรกควรเป็นหัวคอลัมน์ (Header)</li>
+                  <li>คอลัมน์ขั้นต่ำ: <span class="mono">SKU</span>, <span class="mono">Brand</span>, <span class="mono">Name</span>, <span class="mono">Brand Control</span> (หรือแบบเดิม: <span class="mono">sku</span>, <span class="mono">brand</span>, <span class="mono">name</span>, <span class="mono">price control</span>)</li>
+                  <li>ราคาให้เป็นตัวเลข เช่น <span class="mono">1990</span> (ไม่ควรมี “฿” หรือข้อความ)</li>
+                </ul>
+              </div>
+            </form>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="mb-2">รูปแบบคอลัมน์ที่แนะนำ</h6>
+        <div class="small text-secondary mb-2">
+          ใช้ Template จะชัวร์ที่สุด แต่ระบบพยายามแมพชื่อคอลัมน์ใกล้เคียงให้ด้วย
+        </div>
+
+        <div class="border rounded-3 p-3">
+          <div class="mono">sku</div>
+          <div class="mono">brand</div>
+          <div class="mono">name</div>
+          <div class="mono">price control</div>
+        </div>
+
+        <hr class="my-3">
+
+        <h6 class="mb-2">ตัวอย่างข้อมูล (1 แถว)</h6>
+        <div class="border rounded-3 p-3 small">
+          <div class="mono">DS-2CD2Txx / HIKVISION / Bullet Camera / 1990</div>
+          <div class="text-secondary mt-2">
+            * SKU ต้องไม่ว่าง — ใช้เป็นตัวอ้างอิงหลักในการอัปเดต/เพิ่มรายการ
+          </div>
+        </div>
+
+        <hr class="my-3">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card border-danger mt-3">
+  <div class="card-header bg-danger text-white">Danger Zone</div>
+  <div class="card-body">
+
+    <h6 class="mb-2">1) Undo Import รอบล่าสุด</h6>
+    <div class="small text-secondary mb-2">
+      ผลกระทบ: ย้อนกลับเฉพาะ “รอบนำเข้าล่าสุด” ของ Brand Control (SKU ที่รอบนั้นเพิ่ม/แก้จะย้อนกลับ)
+      <br>คำเตือน: ถ้ามีการแก้มือหลัง Import รอบนั้น อาจถูกย้อนกลับด้วย
+      {% if last_batch %}
+        <hr class="my-2">
+        <div>รอบล่าสุด: #{{ last_batch.id }} | ok {{ last_batch.ok_rows }} / skip {{ last_batch.skip_rows }}</div>
+        <div>เวลา: {{ last_batch.created_at }} | โดย: {{ last_batch.created_by }}</div>
+        {% if last_batch.source_name %}<div>แหล่ง: {{ last_batch.source }} — {{ last_batch.source_name }}</div>{% endif %}
+      {% endif %}
+    </div>
+
+    <form method="POST" action="{{ url_for('undo_price_brand_last') }}"
+          onsubmit="return confirm('ยืนยัน Undo รอบล่าสุด?\nผลกระทบ: ข้อมูล Brand Control ที่รอบล่าสุดแก้/เพิ่มจะย้อนกลับ');">
+      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+      <button class="btn btn-outline-danger">Undo รอบล่าสุด</button>
+    </form>
+
+    <hr class="my-3">
+
+    <h6 class="mb-2">2) ล้างข้อมูล Brand Control ทั้งหมด (ไม่เหลืออะไรเลย)</h6>
+    <div class="small text-danger mb-2">
+      ผลกระทบ: คอลัมน์ Brand Control/MAP จะว่างทั้งหมด
+      <br>การล้างนี้ “ลบจริง” (แนะนำสำรอง price.db ก่อน)
+    </div>
+
+    <form method="POST" action="{{ url_for('clear_price_brand_all') }}"
+          onsubmit="return confirm('ยืนยันล้าง Brand Control ทั้งหมด?\nผลกระทบ: ราคาแบรนด์คุมจะหายทั้งหมด');">
+      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+      <label class="form-label">พิมพ์ <b>CLEAR BRAND</b> เพื่อยืนยัน</label>
+      <input class="form-control" name="confirm_text" placeholder="CLEAR BRAND" required>
+      <button class="btn btn-danger mt-2">ล้าง Brand Control ทั้งหมด</button>
+    </form>
+
+  </div>
+</div>
+
+<script>
+(function() {
+  // ====== Settings for save URL API ======
+  // ถ้าโปรเจกต์คุณใช้ endpoint อื่น ให้แก้ตรงนี้จุดเดียว
+  const API_URL = "/api/price/config/gsheet_url";
+  const PLATFORM = "PRICE_BRAND_CONTROL_SYSTEM";
+  const NAME = "GoogleSheet_Brand_Control";
+
+  const sheetUrlEl = document.getElementById("sheetUrl");
+  const sheetWsEl = document.getElementById("sheetWs");
+  const statusEl = document.getElementById("saveStatus");
+  const btnSave = document.getElementById("btnSaveUrl");
+  const btnClear = document.getElementById("btnClearUrl");
+  const btnClearWorksheet = document.getElementById("btnClearWorksheet");
+
+  function setStatus(text, type) {
+    statusEl.textContent = text || "";
+    statusEl.className = "ms-1 small";
+    if (type === "ok") statusEl.classList.add("text-success");
+    if (type === "err") statusEl.classList.add("text-danger");
+    if (type === "info") statusEl.classList.add("text-secondary");
+  }
+
+  async function postJSON(url, data) {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    return { ok: resp.ok, status: resp.status, data: await resp.json().catch(() => ({})) };
+  }
+
+  if (btnSave) {
+    btnSave.addEventListener("click", async () => {
+      const url = (sheetUrlEl.value || "").trim();
+      const wsName = (sheetWsEl?.value || "").trim();
+      if (!url) {
+        setStatus("กรุณากรอก URL ก่อนบันทึก", "err");
+        return;
+      }
+      setStatus("กำลังบันทึก...", "info");
+
+      try {
+        const res = await postJSON(API_URL, {
+          action: "save",
+          platform: PLATFORM,
+          name: NAME,
+          url: url,
+          worksheet: wsName,
+        });
+        if (res.ok) setStatus("บันทึก URL สำเร็จ", "ok");
+        else setStatus("บันทึกไม่สำเร็จ (ตรวจสอบ API/สิทธิ์)", "err");
+      } catch (e) {
+        setStatus("บันทึกไม่สำเร็จ (เชื่อมต่อ API ไม่ได้)", "err");
+      }
+    });
+  }
+
+  if (btnClear) {
+    btnClear.addEventListener("click", async () => {
+      setStatus("กำลังล้าง...", "info");
+      try {
+        const res = await postJSON(API_URL, { action: "delete", platform: PLATFORM, name: NAME });
+        if (res.ok) {
+          sheetUrlEl.value = "";
+          if (sheetWsEl) sheetWsEl.value = "";
+          setStatus("ล้าง URL แล้ว", "ok");
+        } else {
+          setStatus("ล้างไม่สำเร็จ (ตรวจสอบ API/สิทธิ์)", "err");
+        }
+      } catch (e) {
+        setStatus("ล้างไม่สำเร็จ (เชื่อมต่อ API ไม่ได้)", "err");
+      }
+    });
+  }
+
+  if (btnClearWorksheet) {
+    btnClearWorksheet.addEventListener("click", async () => {
+      if (!sheetWsEl) return;
+      setStatus("กำลังล้างชื่อแท็บ...", "info");
+      try {
+        const res = await postJSON(API_URL, {
+          action: "save",
+          platform: PLATFORM,
+          name: NAME,
+          worksheet: "",
+        });
+        if (res.ok) {
+          sheetWsEl.value = "";
+          setStatus("ล้างชื่อแท็บแล้ว", "ok");
+        } else {
+          setStatus("ล้างชื่อแท็บไม่สำเร็จ (ตรวจสอบ API/สิทธิ์)", "err");
+        }
+      } catch (e) {
+        setStatus("ล้างชื่อแท็บไม่สำเร็จ (เชื่อมต่อ API ไม่ได้)", "err");
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,240 @@
+
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+  <div>
+    <div class="page-title d-flex align-items-center">
+      <div class="page-title-icon me-3">🛒</div>
+      <div class="d-flex align-items-baseline flex-wrap">
+        <div class="page-title-main me-3">นำเข้า: สั่งขาย</div>
+        <div class="text-muted" style="font-size: 1rem; border-left: 2px solid #ccc; padding-left: 12px;">
+          Sabuy Soft
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <form method="get" class="bg-white p-2 rounded shadow-sm border d-flex align-items-center gap-2 flex-wrap">
+    <div class="text-secondary small fw-bold text-nowrap">
+      <i class="bi bi-calendar-range me-1"></i> ช่วงวันที่:
+    </div>
+    <div class="d-flex align-items-center gap-1">
+      <input type="date" name="date_from" class="form-control form-control-sm" style="width: 130px;" 
+             value="{{ date_from }}" onchange="this.form.submit()">
+      <span class="text-muted small">ถึง</span>
+      <input type="date" name="date_to" class="form-control form-control-sm" style="width: 130px;" 
+             value="{{ date_to }}" onchange="this.form.submit()">
+    </div>
+    
+    <a href="{{ url_for('import_sales_view') }}" class="btn btn-light btn-sm border text-primary fw-bold d-flex align-items-center" title="วันนี้">
+      <i class="bi bi-arrow-clockwise me-1"></i> วันนี้
+    </a>
+
+    <button type="button" class="btn btn-outline-danger btn-sm ms-2" onclick="openClearSalesModal()">
+        <i class="bi bi-trash-fill"></i> ล้างประวัติ
+    </button>
+  </form>
+</div>
+
+<div class="row g-3 mb-4 justify-content-center">
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);">
+      <div class="card-body">
+        <div class="text-success small fw-bold text-uppercase mb-2">
+          <i class="bi bi-check-circle-fill me-1"></i> อัปเดตสำเร็จ (Success)
+        </div>
+        <div class="d-flex align-items-center justify-content-between">
+          <h2 class="mb-0 fw-bold text-success">{{ stats.success }}</h2>
+          <i class="bi bi-file-earmark-check text-success opacity-25 fs-1"></i>
+        </div>
+        <small class="text-success opacity-75">รายการสั่งขายที่บันทึกได้</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);">
+      <div class="card-body">
+        <div class="text-danger small fw-bold text-uppercase mb-2">
+          <i class="bi bi-x-octagon-fill me-1"></i> ไม่สำเร็จ (Failed)
+        </div>
+        <div class="d-flex align-items-center justify-content-between">
+          <h2 class="mb-0 fw-bold text-danger">{{ stats.failed }}</h2>
+          <i class="bi bi-bug-fill text-danger opacity-25 fs-1"></i>
+        </div>
+        <small class="text-danger opacity-75">ข้อมูลผิดพลาด</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-header bg-white pt-3 pb-0 border-bottom-0">
+    <ul class="nav nav-tabs card-header-tabs" id="importTab" role="tablist">
+      <li class="nav-item">
+        <button class="nav-link active fw-bold text-primary" id="file-tab" data-bs-toggle="tab" data-bs-target="#tab-file" type="button">
+          <i class="bi bi-file-earmark-excel me-2"></i>อัปโหลดไฟล์
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link fw-bold text-success" id="gsheet-tab" data-bs-toggle="tab" data-bs-target="#tab-gsheet" type="button">
+          <i class="bi bi-google me-2"></i>Google Sheet
+        </button>
+      </li>
+    </ul>
+  </div>
+  
+  <div class="card-body bg-light">
+    <div class="tab-content">
+      
+      <div class="tab-pane fade show active" id="tab-file">
+        <form method="post" enctype="multipart/form-data">
+          <input type="hidden" name="mode" value="file">
+          <div class="row align-items-end g-3">
+            <div class="col-md-9">
+              <label class="form-label small text-muted">เลือกไฟล์ Excel (.xlsx, .xls)</label>
+              <input class="form-control" type="file" name="file" accept=".xlsx,.xls" required>
+            </div>
+            <div class="col-md-3">
+              <button type="submit" class="btn btn-primary w-100"><i class="bi bi-cloud-upload me-1"></i> นำเข้าไฟล์</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="tab-pane fade" id="tab-gsheet">
+        <form method="post">
+          <input type="hidden" name="mode" value="gsheet">
+          
+          <div class="row align-items-end g-3">
+            <div class="col-md-9">
+              <label class="form-label small text-muted">Google Sheet URL</label>
+              
+              <div class="input-group">
+                <input type="url" class="form-control" id="sales_sheet_url" name="sheet_url" 
+                       placeholder="https://docs.google.com/spreadsheets/d/..." 
+                       value="{{ saved_url }}" required>
+                
+                <button class="btn btn-outline-secondary" type="button" onclick="saveSalesUrl('save')" title="บันทึกลิงก์นี้ถาวร">
+                  <i class="bi bi-save"></i> บันทึก
+                </button>
+                <button class="btn btn-outline-danger" type="button" onclick="saveSalesUrl('delete')" title="ลบลิงก์ออก">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+              <div class="form-text mt-1" id="url-msg"></div>
+            </div>
+            
+            <div class="col-md-3">
+              <button type="submit" class="btn btn-success w-100 fw-bold">
+                <i class="bi bi-cloud-download-fill me-1"></i> ดึงข้อมูล
+              </button>
+            </div>
+          </div>
+
+          <div class="form-text mt-2 text-success">
+            <i class="bi bi-check-circle-fill"></i> ระบบจะค้นหา Tab ชื่อ <strong>"Import_sabuysoft_sales_10d"</strong>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="clearSalesLogModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title"><i class="bi bi-trash-fill me-2"></i>ล้างประวัติ (สั่งขาย)</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form action="{{ url_for('clear_sales_log') }}" method="POST">
+          <div class="modal-body">
+            <p class="mb-2">กรุณาเลือกรูปแบบการล้างข้อมูล:</p>
+            
+            <div class="card card-body bg-light border-0 p-2 mb-3">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="mode" id="modeRangeSales" value="range" checked>
+                    <label class="form-check-label" for="modeRangeSales">
+                        ล้าง Log ของวันที่เลือก ({{ date_from_thai }} - {{ date_to_thai }})
+                    </label>
+                </div>
+                
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="mode" id="modeAllSales" value="all">
+                    <label class="form-check-label text-danger fw-bold" for="modeAllSales">
+                        ล้างประวัติทั้งหมด (Reset All Time)
+                    </label>
+                </div>
+            </div>
+
+            <input type="hidden" name="date_from" value="{{ date_from }}">
+            <input type="hidden" name="date_to" value="{{ date_to }}">
+            
+            <hr>
+
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="delete_data" value="yes" id="checkDeleteDataSales">
+                <label class="form-check-label fw-bold text-danger" for="checkDeleteDataSales">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i> ลบข้อมูล "ใบสั่งขาย" จริงออกด้วย
+                </label>
+                <div class="form-text text-muted small" style="font-size: 0.8rem;">
+                    * หากติ๊กช่องนี้ ข้อมูล PO/Status ในตาราง Sales จะถูกลบหายไป
+                </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+            <button type="submit" class="btn btn-danger">ยืนยันการลบ</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openClearSalesModal() {
+    new bootstrap.Modal(document.getElementById('clearSalesLogModal')).show();
+}
+
+function saveSalesUrl(action) {
+    const urlInput = document.getElementById('sales_sheet_url');
+    const msgDiv = document.getElementById('url-msg');
+    const urlVal = urlInput.value.trim();
+
+    if (action === 'save' && !urlVal) {
+        alert('กรุณากรอก URL ก่อนกดบันทึก');
+        return;
+    }
+    if (action === 'delete' && !confirm('ต้องการลบลิงก์ที่บันทึกไว้ใช่หรือไม่?')) {
+        return;
+    }
+
+    // ใช้ key: SALES_SYSTEM และชื่อร้านใหม่
+    fetch("{{ url_for('api_shop_url') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            platform: "SALES_SYSTEM",
+            shop_name: "GoogleSheet_Sales",  // ชื่อเฉพาะไม่ให้ชนกับ Stock
+            url: urlVal,
+            action: action
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            msgDiv.innerHTML = `<span class="text-${action==='save'?'success':'danger'} fw-bold"><i class="bi bi-check-circle"></i> ${data.msg}</span>`;
+            if (action === 'delete') urlInput.value = "";
+            setTimeout(() => { msgDiv.innerHTML = ""; }, 3000);
+        } else {
+            alert("Error: " + data.msg);
+        }
+    })
+    .catch(error => { console.error('Error:', error); alert('เกิดข้อผิดพลาดในการเชื่อมต่อ'); });
+}
+</script>
+
+{% endblock %}

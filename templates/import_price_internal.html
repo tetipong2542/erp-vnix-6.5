@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+  <div>
+    <div class="page-title d-flex align-items-center">
+      <div class="page-title-icon me-3">🏷️</div>
+      <div class="d-flex align-items-baseline flex-wrap">
+        <div class="page-title-main me-3">นำเข้า: ข้อมูลฝั่งเรา (Internal)</div>
+        <div class="text-muted" style="font-size: 1rem; border-left: 2px solid #ccc; padding-left: 12px;">
+          SKU Pricing
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{{ url_for('download_price_internal_template') }}">
+      <i class="bi bi-download me-1"></i>ดาวน์โหลด Template
+    </a>
+    <a class="btn btn-light border" href="{{ url_for('price_dashboard') }}">
+      <i class="bi bi-arrow-left"></i> กลับ Dashboard
+    </a>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-body bg-light">
+
+    <ul class="nav nav-pills mb-3" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-file" type="button" role="tab">
+          <i class="bi bi-file-earmark-arrow-up me-1"></i>นำเข้าไฟล์
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-gsheet" type="button" role="tab">
+          <i class="bi bi-google me-1"></i>Google Sheet
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content">
+      <!-- ================== FILE ================== -->
+      <div class="tab-pane fade show active" id="tab-file" role="tabpanel">
+        <form method="post" enctype="multipart/form-data">
+          <input type="hidden" name="mode" value="file">
+
+          <div class="row align-items-end g-2">
+            <div class="col-md-9">
+              <label class="form-label small text-muted mb-1">เลือกไฟล์ Excel/CSV</label>
+              <input class="form-control" type="file" name="file" accept=".xlsx,.xls,.csv" required>
+            </div>
+
+            <div class="col-md-3">
+              <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-cloud-upload me-1"></i> นำเข้าไฟล์
+              </button>
+            </div>
+
+            <div class="col-12">
+              <div class="form-text mt-1 text-muted" style="font-size: 0.85rem;">
+                <i class="bi bi-info-circle me-1"></i>
+                คอลัมน์ขั้นต่ำ: <strong>SKU, Cost, Our Price</strong> (หรือใช้แบบเดิม <strong>sku, cost, our_price</strong>)
+                (แนะนำเพิ่ม Brand/Name/Spec/Floor Price/Min Margin %/Pack Cost/Ship Subsidy)
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- ================== GSHEET ================== -->
+      <div class="tab-pane fade" id="tab-gsheet" role="tabpanel">
+        <form method="post">
+          <input type="hidden" name="mode" value="gsheet">
+
+          <div class="row g-3 align-items-start">
+            <div class="col-12 col-md-8">
+              <label class="form-label">Google Sheet URL</label>
+              <div class="d-flex gap-2">
+                <input class="form-control"
+                       id="sheet_url_internal"
+                       name="sheet_url"
+                       value="{{ saved_url or '' }}"
+                       placeholder="https://docs.google.com/spreadsheets/d/..."
+                       required>
+
+                <button type="button" class="btn btn-outline-success"
+                        onclick="saveGsheetUrlInternal()">
+                  บันทึก
+                </button>
+
+                <button type="button" class="btn btn-outline-danger"
+                        onclick="deleteGsheetUrlInternal()">
+                  ลบ
+                </button>
+              </div>
+              <div class="form-text" style="min-height:20px;">
+                แนะนำให้แถวแรกเป็น header: <b>sku, cost, our_price</b> (และคอลัมน์เสริมอื่น ๆ ได้)
+              </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">Worksheet (ถ้าไม่ใส่ จะใช้แท็บแรก)</label>
+              <input class="form-control" id="worksheet_internal" name="worksheet" value="{{ saved_worksheet or '' }}" placeholder="เช่น Internal">
+              <div class="form-text" style="min-height:20px;">ใส่ชื่อแท็บใน Google Sheet</div>
+            </div>
+
+            <div class="col-12 col-md-3 d-grid">
+              <label class="form-label invisible">Submit</label>
+              <button class="btn btn-primary">
+                <i class="bi bi-cloud-download me-1"></i>ดึงจาก Google Sheet
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card border-danger mt-3">
+  <div class="card-header bg-danger text-white">Danger Zone</div>
+  <div class="card-body">
+
+    <h6 class="mb-2">1) Undo Import รอบล่าสุด</h6>
+    <div class="small text-secondary mb-2">
+      ผลกระทบ: ย้อนกลับเฉพาะ “รอบนำเข้าล่าสุด” ของ Internal (SKU ที่รอบนั้นเพิ่ม/แก้จะย้อนกลับ)
+      <br>คำเตือน: ถ้ามีการแก้มือหลัง Import รอบนั้น อาจถูกย้อนกลับด้วย
+      {% if last_batch %}
+        <hr class="my-2">
+        <div>รอบล่าสุด: #{{ last_batch.id }} | ok {{ last_batch.ok_rows }} / skip {{ last_batch.skip_rows }}</div>
+        <div>เวลา: {{ last_batch.created_at }} | โดย: {{ last_batch.created_by }}</div>
+        {% if last_batch.source_name %}<div>แหล่ง: {{ last_batch.source }} — {{ last_batch.source_name }}</div>{% endif %}
+      {% endif %}
+    </div>
+
+    <form method="POST" action="{{ url_for('undo_price_internal_last') }}"
+          onsubmit="return confirm('ยืนยัน Undo รอบล่าสุด?\nผลกระทบ: ข้อมูลที่รอบล่าสุดแก้/เพิ่มจะย้อนกลับ');">
+      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+      <button class="btn btn-outline-danger">Undo รอบล่าสุด</button>
+    </form>
+
+    <hr class="my-3">
+
+    <h6 class="mb-2">2) ล้างข้อมูล Internal ทั้งหมด (ไม่เหลืออะไรเลย)</h6>
+    <div class="small text-danger mb-2">
+      ผลกระทบ: Dashboard Price Marketing จะไม่เห็น Our Price/Cost ของสินค้าทั้งหมด (เหมือนยังไม่เคยนำเข้า Internal)
+      <br>การล้างนี้ “ลบจริง” (แนะนำสำรอง price.db ก่อน)
+    </div>
+
+    <form method="POST" action="{{ url_for('clear_price_internal_all') }}"
+          onsubmit="return confirm('ยืนยันล้าง Internal ทั้งหมด?\nผลกระทบ: Dashboard ฝั่ง Internal จะว่าง');">
+      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+      <label class="form-label">พิมพ์ <b>CLEAR INTERNAL</b> เพื่อยืนยัน</label>
+      <input class="form-control" name="confirm_text" placeholder="CLEAR INTERNAL" required>
+      <button class="btn btn-danger mt-2">ล้าง Internal ทั้งหมด</button>
+    </form>
+
+  </div>
+</div>
+
+<script>
+async function saveGsheetUrlInternal(){
+  const url = (document.getElementById('sheet_url_internal').value || '').trim();
+  const worksheet = (document.getElementById('worksheet_internal')?.value || '').trim();
+  const res = await fetch('/api/price/config/gsheet_url', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({action:'save', platform:'PRICE_INTERNAL_SYSTEM', name:'GoogleSheet_Price_Internal', url, worksheet})
+  });
+  const data = await res.json();
+  alert(data.msg || (data.success ? 'บันทึกแล้ว' : 'บันทึกไม่สำเร็จ'));
+}
+
+async function deleteGsheetUrlInternal(){
+  const res = await fetch('/api/price/config/gsheet_url', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({action:'delete', platform:'PRICE_INTERNAL_SYSTEM', name:'GoogleSheet_Price_Internal'})
+  });
+  const data = await res.json();
+  if (data.success) {
+    document.getElementById('sheet_url_internal').value = '';
+    const wsEl = document.getElementById('worksheet_internal');
+    if (wsEl) wsEl.value = '';
+  }
+  alert(data.msg || (data.success ? 'ลบแล้ว' : 'ลบไม่สำเร็จ'));
+}
+</script>
+{% endblock %}

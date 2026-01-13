@@ -1,0 +1,51 @@
+{# templates/_supplier_stock_rows.html #}
+{% for r in rows %}
+<tr class="{% if r.total_stock|int == 0 %}table-light{% endif %}">
+  <td>
+    <div class="fw-bold text-dark">{{ r.sku }}</div>
+    {% if r.brand %}<div class="text-muted small">{{ r.brand }}</div>{% endif %}
+    {% if r.name %}<div class="text-secondary small">{{ r.name }}</div>{% endif %}
+  </td>
+
+  <td>
+    {% if r["items"] %}
+    <table class="sup-table">
+      {% for it in r["items"] %}
+      <tr>
+        <td style="width: 120px;">
+          <span class="badge text-bg-light">{{ it.supplier }}</span>
+        </td>
+        <td>
+          <span class="sku-sup text-muted">
+            <i class="bi bi-upc me-1"></i>{{ it.sku_sup }}
+          </span>
+        </td>
+        <td class="text-end fw-bold" style="width: 80px;">
+          {{ "{:,.0f}".format(it.stock|int) }}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+      <span class="text-muted small fst-italic">No supplier info</span>
+    {% endif %}
+  </td>
+
+  <td class="text-center">
+    {% set ts = r.total_stock|int %}
+    <span class="total-stock-pill {% if ts == 0 %}text-danger{% else %}text-primary{% endif %}"
+          style="background: rgba(255,255,255,0.10);">
+      {{ "{:,.0f}".format(ts) }}
+    </span>
+  </td>
+
+  <td>
+    {% if r.last_updated %}
+      <div class="small fw-semibold text-dark">{{ r.last_updated.strftime('%d/%m/%Y') }}</div>
+      <div class="small text-muted">{{ r.last_updated.strftime('%H:%M') }}</div>
+    {% else %}
+      <span class="text-muted">-</span>
+    {% endif %}
+  </td>
+</tr>
+{% endfor %}

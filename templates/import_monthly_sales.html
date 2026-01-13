@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h3 class="mb-0">Import Monthly Sales</h3>
+    <a class="btn btn-outline-primary"
+       href="{{ url_for('download_price_monthly_sales_template') }}">
+      <i class="bi bi-file-earmark-arrow-down"></i> Download Template
+    </a>
+  </div>
+
+  {% if last_batch %}
+  <div class="alert alert-info">
+    ล่าสุด: {{ last_batch.source }} | {{ last_batch.source_name }} | ok={{ last_batch.ok_rows }} skip={{ last_batch.skip_rows }}
+  </div>
+  {% endif %}
+
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">นำเข้า Excel/CSV</div>
+        <div class="card-body">
+          <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="mode" value="file">
+            <div class="mb-3">
+              <input class="form-control" type="file" name="file" accept=".xlsx,.xls,.csv">
+            </div>
+            <button class="btn btn-primary">
+              <i class="bi bi-upload"></i> Import
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">นำเข้า Google Sheet</div>
+        <div class="card-body">
+          <form method="post">
+            <input type="hidden" name="mode" value="gsheet">
+            <div class="mb-2">
+              <label class="form-label">Sheet URL</label>
+              <input class="form-control" type="text" name="sheet_url" value="{{ saved_url }}">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Worksheet</label>
+              <input class="form-control" type="text" name="worksheet" value="{{ saved_ws or 'Sheet1' }}">
+            </div>
+            <button class="btn btn-success">
+              <i class="bi bi-google"></i> Import from Sheet
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card border-danger">
+        <div class="card-header text-danger">ล้างข้อมูล Monthly Sales</div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('import_monthly_sales_clear_all') }}">
+            <div class="row g-2 align-items-center">
+              <div class="col-md-4">
+                <input class="form-control" name="confirm" placeholder='พิมพ์ "CLEAR SALES" เพื่อยืนยัน'>
+              </div>
+              <div class="col-md-3">
+                <button class="btn btn-danger">
+                  <i class="bi bi-trash"></i> Clear
+                </button>
+              </div>
+            </div>
+          </form>
+          <div class="text-muted mt-2">
+            * ล้างแล้วระบบจะตั้ง Monthly Sales = 0 ทุก SKU
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

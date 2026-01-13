@@ -1,0 +1,113 @@
+{% for r in rows %}
+<tr data-sku="{{ r.sku }}"
+	data-market-id="{{ r.market_item_id or '' }}"
+	data-auto-rules="{{ (r.auto_rules or [])|join(',') }}"
+	data-aging-bucket="{{ r.aging_bucket or '' }}"
+	data-no-sales="{{ '1' if r.no_sales else '0' }}">
+		<td data-col="sku" class="fw-bold pm-col-sku"><span class="pm-row-dot bg-{{ r.rec_level }}"></span>{{ r.sku }}</td>
+	<td data-col="brand">{{ r.brand }}</td>
+		<td data-col="name" class="text-truncate pm-name" title="{{ r.name }}">{{ r.name }}</td>
+			<td data-col="stock_internal" class="text-end pm-num">
+				{% if r.stock_internal is not none %}{{ r.stock_internal }}{% endif %}
+			</td>
+			<td data-col="stock" class="text-end pm-num pm-split-left">
+				{% if r.stock_qty is not none %}{{ r.stock_qty }}{% endif %}
+			</td>
+			<td data-col="monthly_sales" class="text-end pm-num">
+				{% if r.monthly_sales is not none %}{{ r.monthly_sales }}{% endif %}
+			</td>
+		<td data-col="cost" class="text-end pm-num pm-col-cost pm-split-left pm-editable" data-raw="{{ r.cost if r.cost is not none else '' }}">
+		{% if r.cost is not none %}{{ "{:,.2f}".format(r.cost) }}{% endif %}
+	</td>
+		<td data-col="our_price" class="text-end pm-num pm-col-our pm-editable" data-raw="{{ r.our_price if r.our_price is not none else '' }}">
+		{% if r.our_price is not none %}{{ "{:,.2f}".format(r.our_price) }}{% endif %}
+	</td>
+		<td data-col="market_best" class="text-end pm-num pm-col-market pm-split-left pm-editable" data-raw="{{ r.market_net if r.market_net is not none else '' }}">
+		{% if r.market_net is not none %}{{ "{:,.2f}".format(r.market_net) }}{% endif %}
+	</td>
+		<td data-col="voucher" class="text-end pm-num pm-editable" data-raw="{{ r.market_voucher if r.market_voucher is not none else '' }}">
+		{% if r.market_voucher is not none %}{{ "{:,.2f}".format(r.market_voucher) }}{% endif %}
+	</td>
+		<td data-col="brand_control" class="text-end pm-num pm-split-left pm-editable" data-raw="{{ r.brand_control if r.brand_control is not none else '' }}">
+		{% if r.brand_control is not none %}{{ "{:,.2f}".format(r.brand_control) }}{% endif %}
+	</td>
+		<td data-col="gap" class="text-end pm-num pm-split-left">
+		{% if r.gap is not none %}
+			<div class="fw-semibold">{{ "{:,.2f}".format(r.gap) }}</div>
+			{% if r.gap_pct is not none %}
+				<div class="small {% if r.gap_pct > 0 %}text-danger{% elif r.gap_pct < 0 %}text-success{% else %}text-muted{% endif %}">
+					({{ "{:+.1f}".format(r.gap_pct) }}%)
+				</div>
+			{% endif %}
+		{% endif %}
+	</td>
+		<td data-col="profit_our" class="text-end pm-num">
+		{% if r.profit_now is not none %}
+			<div class="fw-semibold">{{ "{:,.2f}".format(r.profit_now) }}</div>
+			{% if r.profit_now_pct is not none %}
+				<div class="small {% if r.profit_now_pct < 0 %}text-danger{% elif r.profit_now_pct > 0 %}text-success{% else %}text-muted{% endif %}">
+					({{ "{:+.1f}".format(r.profit_now_pct) }}%)
+				</div>
+			{% endif %}
+		{% endif %}
+	</td>
+		<td data-col="profit_match" class="text-end pm-num" data-raw-pct="{{ r.profit_match_pct if r.profit_match_pct is not none else '' }}">
+		{% if r.profit_match is not none %}
+			<div class="fw-semibold">{{ "{:,.2f}".format(r.profit_match) }}</div>
+			{% if r.profit_match_pct is not none %}
+				<div class="small {% if r.profit_match_pct < 0 %}text-danger{% elif r.profit_match_pct > 0 %}text-success{% else %}text-muted{% endif %}">
+					({{ "{:+.1f}".format(r.profit_match_pct) }}%)
+				</div>
+			{% endif %}
+		{% endif %}
+	</td>
+	<td data-col="recommend" class="pm-split-left">
+		<div class="d-flex flex-wrap gap-1">
+			{% for t in r.recs %}
+				<span class="badge {{ t.badge_class }}">{{ t.text }}</span>
+			{% endfor %}
+			{% if r.age_tags %}
+				{% for t in r.age_tags %}
+					{% if t == "ไม่มียอดขาย" %}
+						<span class="badge bg-secondary-subtle text-secondary">{{ t }}</span>
+					{% elif "1ปี" in t %}
+						<span class="badge bg-danger-subtle text-danger">{{ t }}</span>
+					{% elif "6เดือน" in t %}
+						<span class="badge bg-warning text-dark">{{ t }}</span>
+					{% else %}
+						<span class="badge bg-warning-subtle text-warning-emphasis">{{ t }}</span>
+					{% endif %}
+				{% endfor %}
+			{% endif %}
+			{% if (r.recs|length) == 0 %}
+				<span class="text-muted">-</span>
+			{% endif %}
+		</div>
+	</td>
+	<td data-col="shop" style="max-width: 200px;" class="text-truncate pm-editable" data-raw="{{ r.market_shop or '' }}" title="{{ r.market_shop or '' }}">{{ r.market_shop or "" }}</td>
+	<td data-col="mall" class="text-center pm-editable" data-raw="{{ '1' if r.market_is_mall else '0' }}">
+		{% if r.market_is_mall %}
+			<span class="badge bg-success-subtle text-success">MALL</span>
+		{% else %}
+			<span class="text-muted">-</span>
+		{% endif %}
+	</td>
+	<td data-col="url" class="pm-editable" data-raw="{{ r.market_url or '' }}">
+		{% if r.market_url %}
+			<a class="btn btn-sm btn-outline-primary" href="{{ r.market_url }}" target="_blank" rel="noopener">เปิดลิงก์</a>
+		{% else %}
+			<span class="text-muted">-</span>
+		{% endif %}
+	</td>
+	<td data-col="owner">
+		{% if r.owner %}
+			<span class="badge bg-dark-subtle text-dark">{{ r.owner }}</span>
+		{% else %}
+			<span class="text-muted">-</span>
+		{% endif %}
+	</td>
+		<td data-col="updated" class="pm-muted pm-split-left pm-editable" data-raw="{{ r.market_updated.isoformat() if r.market_updated else '' }}">
+			{% if r.market_updated %}{{ r.market_updated|thai_be }}{% else %}-{% endif %}
+		</td>
+</tr>
+{% endfor %}

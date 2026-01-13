@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .pr-header{
+    background: linear-gradient(135deg, rgba(13,110,253,.10), rgba(25,135,84,.10));
+    border: 1px solid rgba(0,0,0,.06);
+    border-radius: 16px;
+    padding: 16px;
+  }
+  .metric{
+    border: 1px solid rgba(0,0,0,.06);
+    border-radius: 14px;
+    padding: 14px;
+    background: #fff;
+  }
+  .metric .num{ font-size: 1.6rem; font-weight: 800; }
+  .sku-pill{ font-weight: 800; }
+  .mini{ font-size:.85rem; }
+  .w-qty{ width: 90px; }
+</style>
+
+<div class="pr-header mb-3 d-flex justify-content-between flex-wrap gap-2 align-items-start">
+  <div>
+    <h4 class="mb-1 fw-bold">
+      <i class="bi bi-cart-check me-2"></i>กอง 3: รายงานจัดซื้อ
+    </h4>
+    <div class="text-muted mini">
+      วันที่รายงาน: <b>{{ report_date }}</b>
+      | อัปเดตล่าสุด: {{ now_ts|thai_be }}
+      {% if summary.prev_date %}
+        | เทียบค้างจาก: <b>{{ summary.prev_date }}</b>
+      {% endif %}
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('dashboard', platform=platform_sel, shop_id=shop_sel) }}" class="btn btn-light border">
+      <i class="bi bi-arrow-left"></i> กลับ Dashboard
+    </a>
+  </div>
+</div>
+
+<div class="row g-2 mb-3">
+  <div class="col-12 col-md-4">
+    <div class="metric">
+      <div class="text-muted mini">จำนวน SKU ที่ต้องสั่งเพิ่ม</div>
+      <div class="num">{{ summary.sku_count }}</div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="metric">
+      <div class="text-muted mini">จำนวนรวมที่ต้องสั่งเพิ่ม (ชิ้น)</div>
+      <div class="num">{{ summary.total_need }}</div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="metric">
+      <div class="text-muted mini">สั่งแล้ว/ค้างรับ (รวม)</div>
+      <div class="num">{{ summary.total_open_po }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle" id="purchaseTable">
+    <thead class="table-light">
+      <tr>
+        <th>SKU</th>
+        <th>สินค้า</th>
+        <th class="text-end">Stock</th>
+        <th class="text-end">ยอดรวม</th>
+        <th class="text-end">ขาด</th>
+        <th class="text-end">ค้างยกมา</th>
+        <th class="text-end">วันนี้</th>
+        <th class="text-end">ค้างรับ</th>
+        <th class="text-end">ต้องสั่งเพิ่ม</th>
+        <th>แพลตฟอร์ม</th>
+        <th style="width:240px;">จัดการ</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td>
+          <div class="sku-pill">{{ it.sku }}</div>
+          <div class="text-muted mini">{{ it.brand }} {{ it.model }}</div>
+        </td>
+        <td class="mini">
+          <button type="button"
+                  class="btn btn-sm btn-outline-secondary js-detail"
+                  data-detail-id="detail-{{ loop.index }}">
+            <i class="bi bi-list-ul"></i> ดูออเดอร์
+          </button>
+        </td>
+
+        <td class="text-end">{{ it.stock_qty }}</td>
+        <td class="text-end">{{ it.demand_qty }}</td>
+        <td class="text-end">
+          <span class="badge bg-danger-subtle text-danger">{{ it.shortage_total }}</span>
+        </td>
+        <td class="text-end">
+          <span class="badge bg-secondary-subtle text-secondary">{{ it.carry_qty }}</span>
+        </td>
+        <td class="text-end">
+          <span class="badge bg-primary-subtle text-primary">{{ it.new_qty }}</span>
+        </td>
+        <td class="text-end">
+          <span class="badge bg-info-subtle text-info">{{ it.open_po_qty }}</span>
+        </td>
+        <td class="text-end">
+          {% if it.need_to_order > 0 %}
+            <span class="badge bg-dark">{{ it.need_to_order }}</span>
+          {% else %}
+            <span class="text-muted mini">-</span>
+          {% endif %}
+        </td>
+
+        <td class="mini">
+          {% for p, q in it.platform_qty.items() %}
+            <span class="badge bg-light text-dark border">{{ p }}: {{ q }}</span>
+          {% endfor %}
+        </td>
+
+        <td>
+          {% if it.need_to_order > 0 %}
+          <form method="post" action="{{ url_for('purchase_create_order') }}" class="d-flex gap-2">
+            <input type="hidden" name="sku" value="{{ it.sku }}">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <input type="number" class="form-control form-control-sm w-qty"
+                   name="qty" value="{{ it.need_to_order }}" min="1">
+            <button class="btn btn-sm btn-primary">
+              <i class="bi bi-bag-plus"></i> บันทึกสั่งซื้อ
+            </button>
+          </form>
+          {% else %}
+            <span class="text-muted mini">ไม่ต้องสั่งเพิ่ม</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% for it in items %}
+<template id="detail-{{ loop.index }}">
+  <div class="p-2">
+    <div class="fw-bold mb-2">ออเดอร์ที่ติดกอง 3 ของ SKU นี้</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped mb-0">
+        <thead>
+          <tr>
+            <th>Platform</th>
+            <th>Shop</th>
+            <th>Order</th>
+            <th class="text-end">Qty</th>
+            <th>Status</th>
+            <th>Order Time</th>
+            <th>SLA</th>
+            <th>Logistic</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in it.orders %}
+          <tr>
+            <td>{{ r.platform }}</td>
+            <td>{{ r.shop }}</td>
+            <td class="fw-bold">{{ r.order_id }}</td>
+            <td class="text-end">{{ r.qty }}</td>
+            <td>{{ r.allocation_status }}</td>
+            <td class="mini">{{ r.order_time|thai_be }}</td>
+            <td class="mini">{{ r.sla }}</td>
+            <td class="mini">{{ r.logistic }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</template>
+{% endfor %}
+
+<hr class="my-4">
+
+<h5 class="fw-bold mb-2"><i class="bi bi-truck me-2"></i>สั่งซื้อแล้ว (ค้างรับ)</h5>
+<div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>PO#</th>
+        <th>SKU</th>
+        <th class="text-end">สั่ง</th>
+        <th class="text-end">รับแล้ว</th>
+        <th class="text-end">ค้าง</th>
+        <th>Status</th>
+        <th>เมื่อ</th>
+        <th style="width:320px;">จัดการ</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in open_lines %}
+      {% set po = line.purchase_order %}
+      {% set pending = (line.qty_ordered - line.qty_received) %}
+      <tr>
+        <td class="fw-bold">{{ po.id }}</td>
+        <td class="fw-bold">{{ line.sku }}</td>
+        <td class="text-end">{{ line.qty_ordered }}</td>
+        <td class="text-end">{{ line.qty_received }}</td>
+        <td class="text-end">
+          <span class="badge bg-info-subtle text-info">{{ pending }}</span>
+        </td>
+        <td><span class="badge bg-light text-dark border">{{ po.status }}</span></td>
+        <td class="mini">{{ po.created_at|thai_be }}</td>
+        <td>
+          <div class="d-flex gap-2 flex-wrap">
+            <form method="post" action="{{ url_for('purchase_receive_line', line_id=line.id) }}" class="d-flex gap-2">
+              <input type="hidden" name="next" value="{{ request.full_path }}">
+              <input type="number" class="form-control form-control-sm w-qty"
+                     name="receive_add" value="0" min="0" max="{{ pending }}">
+              <button class="btn btn-sm btn-success">
+                <i class="bi bi-box-arrow-in-down"></i> รับเข้า
+              </button>
+            </form>
+
+            <form method="post" action="{{ url_for('purchase_cancel_order', po_id=po.id) }}">
+              <input type="hidden" name="next" value="{{ request.full_path }}">
+              <button class="btn btn-sm btn-outline-danger"
+                      onclick="return confirm('ยืนยันยกเลิก PO#{{ po.id }} ?')">
+                <i class="bi bi-x-circle"></i> ยกเลิก PO
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      {% if not open_lines %}
+      <tr>
+        <td colspan="8" class="text-muted text-center py-3">ยังไม่มีรายการสั่งซื้อค้างรับ</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!(window.$ && $.fn.DataTable)) return;
+
+    const dt = $('#purchaseTable').DataTable({
+      order: [[8, 'desc']],
+      pageLength: 50
+    });
+
+    $('#purchaseTable').on('click', '.js-detail', function (e) {
+      e.preventDefault();
+
+      const tr = $(this).closest('tr');
+      const row = dt.row(tr);
+      const tid = $(this).data('detail-id');
+      const tpl = document.getElementById(tid);
+      if (!tpl) return;
+
+      if (row.child.isShown()) {
+        row.child.hide();
+        tr.removeClass('shown');
+      } else {
+        row.child(tpl.innerHTML).show();
+        tr.addClass('shown');
+      }
+    });
+  });
+</script>
+
+{% endblock %}

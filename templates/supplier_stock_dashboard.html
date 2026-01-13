@@ -1,0 +1,577 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+  .kpi-card {
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 16px;
+  }
+
+  html, body { max-width: 100%; overflow-x: hidden; }
+  /* ทำให้ตารางเลื่อนในกล่องของมันเอง (ไม่เลื่อนทั้งหน้า) */
+  .table-responsive.ss-table-scroll{
+    overflow: auto;                      /* ได้ทั้ง x และ y */
+    height: var(--ss-scroll-h, calc(100vh - 300px)); /* บังคับสูงจริง (มีค่า fallback) */
+    min-height: 70vh;                    /* กันหดเวลาข้อมูลน้อย */
+    -webkit-overflow-scrolling: touch;   /* มือถือเลื่อนลื่น */
+  }
+
+  /* ถ้าหน้าจอเล็ก ให้ลดความสูงลงหน่อย */
+  @media (max-width: 768px){
+    .table-responsive.ss-table-scroll{
+      height: var(--ss-scroll-h, 65vh);
+      min-height: 65vh;
+    }
+  }
+
+  .supplier-card {
+    cursor: pointer;
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .supplier-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.06);
+  }
+  .supplier-card.active {
+    outline: 2px solid rgba(230,57,70,0.35);
+    box-shadow: 0 10px 22px rgba(230,57,70,0.10);
+  }
+
+  .supplier-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .supplier-grid a{ text-decoration: none; }
+  .supplier-grid .supplier-card{ height: 100%; }
+  .supplier-grid .card-body{
+    min-height: 84px;
+    padding: 10px 12px;
+  }
+
+  @media (max-width: 1200px){
+    .supplier-grid{ grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  }
+  @media (max-width: 768px){
+    .supplier-grid{ grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  }
+
+  .ss-filter-row{
+    display: grid;
+    grid-template-columns: 1.4fr 0.9fr 0.9fr 0.5fr 0.9fr auto;
+    gap: 10px;
+    align-items: center;
+  }
+  @media (max-width: 1200px){
+    .ss-filter-row{ grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 768px){
+    .ss-filter-row{ grid-template-columns: 1fr; }
+  }
+
+  .kpi-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.08);
+  }
+
+  .table-modern thead th {
+    background: var(--bs-tertiary-bg);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--bs-border-color);
+    padding: 10px 12px;
+    color: var(--bs-secondary-color);
+  }
+
+  /* Headings centered (Excel-like) */
+  #ssTable thead th{
+    text-align: center !important;
+    vertical-align: middle !important;
+  }
+
+  /* หัวตาราง Freeze ในกล่องเลื่อน */
+  #ssTable thead th{
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--bs-tertiary-bg);
+    box-shadow: 0 1px 0 var(--bs-border-color);
+  }
+
+  #ssTable { width: 100% !important; table-layout: fixed; }
+  #ssTable th, #ssTable td { overflow: hidden; }
+  #ssTable td:nth-child(2) { overflow-wrap: anywhere; }
+
+  .table-modern tbody td {
+    padding: 10px 12px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--bs-border-color-translucent);
+  }
+
+  /* Body alignment: keep text readable while centered where appropriate */
+  #ssTable tbody td{ vertical-align: middle !important; }
+  /* Product=1, Breakdown=2, Stock=3, Updated=4 */
+  #ssTable tbody td:nth-child(1),
+  #ssTable tbody td:nth-child(2){ text-align: left; }
+  #ssTable tbody td:nth-child(3),
+  #ssTable tbody td:nth-child(4){ text-align: center; }
+
+  @media (max-width: 1200px){
+    .table-modern thead th { padding: 8px 10px; }
+    .table-modern tbody td { padding: 8px 10px; }
+  }
+
+  .sup-table {
+    width: 100%;
+    font-size: 0.85rem;
+    table-layout: fixed;
+  }
+
+  .sup-table td {
+    padding: 2px 0;
+    border: none !important;
+    vertical-align: middle;
+  }
+
+  .sup-table td:first-child { width: 96px !important; }
+  .sup-table td:last-child  { width: 64px !important; }
+
+  .sku-sup {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.80rem;
+    word-break: break-all;
+  }
+
+  .total-stock-pill {
+    display: inline-block;
+    min-width: 72px;
+    text-align: center;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-weight: 800;
+  }
+</style>
+
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap align-items-end justify-content-between gap-3 mb-3">
+    <div>
+      <h3 class="mb-0 d-flex align-items-center gap-2">
+        <i class="bi bi-box-seam-fill" style="color: var(--vnix-red);"></i>
+        <span>Supplier Stock Dashboard</span>
+      </h3>
+      <div class="text-muted">ตรวจสอบสต๊อกสินค้าจาก Supplier ราย SKU และยอดรวม</div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <div class="btn-group">
+        <button class="btn btn-outline-primary shadow-sm dropdown-toggle"
+                style="border-radius: 999px;"
+                data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="bi bi-file-earmark-excel me-1"></i> Export Excel
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" style="min-width: 320px;">
+          <li>
+            <div class="px-3 py-2" onclick="event.stopPropagation();">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="ssExportAll">
+                <label class="form-check-label fw-semibold" for="ssExportAll">
+                  Export ทั้งหมด (ตาม Total SKU)
+                </label>
+              </div>
+              <div class="text-muted small mt-1">
+                ติ๊กเพื่อดึงข้อมูล “ครบตามจำนวน SKU” บนการ์ดด้านบน
+                โดยไม่จำกัดจากการค้นหา / Stock / Brand ที่กำลังกรองในตาราง
+              </div>
+            </div>
+          </li>
+
+          <li><hr class="dropdown-divider"></li>
+          <li>
+            <a class="dropdown-item ss-export-item" href="#" data-layout="template">
+              แบบ Template (ยาวลงมา)
+            </a>
+          </li>
+          <li>
+            <a class="dropdown-item ss-export-item" href="#" data-layout="horizontal">
+              แบบแนวนอน
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <a class="btn btn-danger shadow-sm" style="border-radius: 999px;" href="{{ url_for('import_supplier_sku_stock_view') }}">
+        <i class="bi bi-cloud-upload me-1"></i> Import Stock
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-4 col-xl-3">
+      <div class="card kpi-card shadow-sm">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="kpi-icon" style="background: rgba(230, 57, 70, 0.10); color: var(--vnix-red);">
+            <i class="bi bi-upc-scan"></i>
+          </div>
+          <div>
+            <div class="text-muted small fw-semibold">Total SKU</div>
+            <div class="fs-4 fw-bold">{{ kpi_total_sku|int }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4 col-xl-3">
+      <div class="card kpi-card shadow-sm">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="kpi-icon" style="background: rgba(29, 53, 87, 0.10); color: var(--vnix-dark);">
+            <i class="bi bi-boxes"></i>
+          </div>
+          <div>
+            <div class="text-muted small fw-semibold">Total Stock (Qty)</div>
+            <div class="fs-4 fw-bold">{{ "{:,.0f}".format(kpi_total_stock|int) }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if supplier_cards %}
+    <div class="supplier-grid">
+      <a href="{{ url_for('supplier_stock_dashboard') }}">
+        <div class="card kpi-card shadow-sm supplier-card {% if not selected_supplier %}active{% endif %}">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <div class="fw-bold text-dark">All Suppliers</div>
+              <span class="badge rounded-pill text-bg-primary">{{ all_sku_nonzero_count|int }}</span>
+            </div>
+            <div class="text-muted small">SKU ที่ Stock &gt; 0 • Supplier {{ all_suppliers_count|int }}</div>
+            <div class="small fw-semibold mt-1">Qty รวม: {{ "{:,.0f}".format(all_qty_total|int) }}</div>
+          </div>
+        </div>
+      </a>
+
+      {% for s in supplier_cards %}
+        <a href="{{ url_for('supplier_stock_dashboard', supplier=s.supplier) }}">
+          <div class="card kpi-card shadow-sm supplier-card {% if selected_supplier==s.supplier %}active{% endif %}">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start">
+                <div class="fw-bold text-dark">{{ s.supplier }}</div>
+                <span class="badge rounded-pill text-bg-primary">{{ s.sku_nonzero }}</span>
+              </div>
+              <div class="text-muted small">SKU ที่ Stock &gt; 0</div>
+              <div class="small fw-semibold mt-1">Qty รวม: {{ "{:,.0f}".format(s.qty_nonzero|int) }}</div>
+            </div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="card shadow-sm mb-3" style="border-radius: 16px;">
+    <div class="card-body py-2">
+      <form id="ssFilterForm" method="get" action="{{ url_for('supplier_stock_dashboard') }}">
+        {% if selected_supplier %}
+          <input type="hidden" name="supplier" value="{{ selected_supplier }}">
+        {% endif %}
+
+        <div class="ss-filter-row">
+          <div>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text"><i class="bi bi-search"></i></span>
+              <input id="ssSearch" name="q" class="form-control"
+                     value="{{ q or '' }}"
+                     placeholder="ค้นหา SKU / Brand / Supplier / SKU SUP">
+              <button class="btn btn-primary" type="submit">ค้นหา</button>
+            </div>
+          </div>
+
+          <div>
+            <select id="ssStockFilter" name="stock" class="form-select form-select-sm">
+              <option value="all" {% if stock_mode=='all' %}selected{% endif %}>Stock: ทั้งหมด</option>
+              <option value="nonzero" {% if stock_mode=='nonzero' %}selected{% endif %}>Stock: มากกว่า 0</option>
+              <option value="zero" {% if stock_mode=='zero' %}selected{% endif %}>Stock: = 0</option>
+            </select>
+          </div>
+
+          <div>
+            <select id="ssBrandFilter" name="brand" class="form-select form-select-sm">
+              <option value="" {% if not brand_sel %}selected{% endif %}>Brand: ทั้งหมด</option>
+              {% for b in (brands or []) %}
+                <option value="{{ b }}" {% if brand_sel==b %}selected{% endif %}>{{ b }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <select id="ssPageLen" name="limit" class="form-select form-select-sm">
+              {% for v in [100,300,500,1000,-1] %}
+                <option value="{{ v }}" {% if limit_sel|int == v %}selected{% endif %}>
+                  {% if v==-1 %}ทั้งหมด{% else %}{{ v }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <select id="ssSortBy" name="sort" class="form-select form-select-sm">
+              <option value="sku_asc"  {% if sort_code=='sku_asc' %}selected{% endif %}>Sort: SKU (A→Z)</option>
+              <option value="sku_desc" {% if sort_code=='sku_desc' %}selected{% endif %}>Sort: SKU (Z→A)</option>
+              <option value="brand_asc" {% if sort_code=='brand_asc' %}selected{% endif %}>Sort: Brand (A→Z)</option>
+              <option value="brand_desc" {% if sort_code=='brand_desc' %}selected{% endif %}>Sort: Brand (Z→A)</option>
+              <option value="name_asc" {% if sort_code=='name_asc' %}selected{% endif %}>Sort: Name (A→Z)</option>
+              <option value="name_desc" {% if sort_code=='name_desc' %}selected{% endif %}>Sort: Name (Z→A)</option>
+              <option value="stock_desc" {% if sort_code=='stock_desc' %}selected{% endif %}>Sort: Total Stock (มาก→น้อย)</option>
+              <option value="stock_asc"  {% if sort_code=='stock_asc' %}selected{% endif %}>Sort: Total Stock (น้อย→มาก)</option>
+              <option value="upd_desc" {% if sort_code=='upd_desc' %}selected{% endif %}>Sort: Updated (ใหม่→เก่า)</option>
+              <option value="upd_asc"  {% if sort_code=='upd_asc' %}selected{% endif %}>Sort: Updated (เก่า→ใหม่)</option>
+            </select>
+          </div>
+
+          <div class="text-md-end">
+            <a id="ssClear" class="btn btn-light btn-sm" href="{{ url_for('supplier_stock_dashboard', supplier=selected_supplier) if selected_supplier else url_for('supplier_stock_dashboard') }}">
+              <i class="bi bi-x-circle me-1"></i>ล้างตัวกรอง
+            </a>
+
+            <button id="ssResetPrefs" type="button" class="btn btn-outline-secondary btn-sm ms-2">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>รีเซ็ตการตั้งค่า
+            </button>
+          </div>
+        </div>
+      </form>
+
+      {% if selected_supplier %}
+        <div class="mt-2">
+          <span class="badge text-bg-primary">
+            Supplier Filter: {{ selected_supplier }}
+          </span>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm" style="border-radius: 16px; overflow: hidden;">
+    <div id="ssScroll" class="table-responsive ss-table-scroll">
+      <table id="ssTable" class="table table-modern table-hover w-100 mb-0" data-userpref-clear-url="{{ url_for('api_userpref_clear') }}">
+        <thead>
+          <tr>
+            <th style="width: 26%;">Product</th>
+            <th style="width: 50%;">Supplier Breakdown</th>
+            <th class="text-center" style="width: 10%;">Total Stock</th>
+            <th style="width: 14%;">Updated</th>
+          </tr>
+        </thead>
+
+        <tbody id="ssTbody"
+               data-key="{{ dash_key }}"
+               data-total="{{ dash_total_rows }}"
+               data-pagesize="{{ dash_page_size }}"
+               data-loaded="{{ rows|length }}">
+          {% include "_supplier_stock_rows.html" %}
+          {% if dash_total_rows == 0 %}
+            <tr><td colspan="4" class="text-center text-muted py-4">ไม่พบข้อมูล</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+
+      <div id="ssInfiniteSentinel" class="py-3 text-center text-muted">
+        <span id="ssInfiniteSpinner" class="spinner-border spinner-border-sm me-2 d-none"></span>
+        <span id="ssInfiniteText">เลื่อนลงเพื่อโหลดเพิ่ม</span>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+(function () {
+  const exportBaseUrl = "{{ url_for('supplier_stock_export_xlsx') }}";
+
+  const form = document.getElementById('ssFilterForm');
+  const qEl = document.getElementById('ssSearch');
+  const stockEl = document.getElementById('ssStockFilter');
+  const brandEl = document.getElementById('ssBrandFilter');
+  const sortEl = document.getElementById('ssSortBy');
+  const limitEl = document.getElementById('ssPageLen');
+
+  function submitNow(){ if(form) form.submit(); }
+
+  if (stockEl) stockEl.addEventListener('change', submitNow);
+  if (brandEl) brandEl.addEventListener('change', submitNow);
+  if (sortEl)  sortEl.addEventListener('change', submitNow);
+  if (limitEl) limitEl.addEventListener('change', submitNow);
+
+  if (qEl) {
+    // Submit only when user explicitly requests it (Enter / Search button)
+    qEl.addEventListener('keydown', function(e){
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitNow();
+      }
+    });
+
+    // After reload, return focus and keep cursor at end
+    window.addEventListener('load', function(){
+      qEl.focus();
+      const len = qEl.value.length;
+      try { qEl.setSelectionRange(len, len); } catch (_) {}
+    });
+  }
+
+  const table = document.getElementById('ssTable');
+  const userPrefClearUrl = table ? String(table.dataset.userprefClearUrl || '') : '';
+  const btnReset = document.getElementById('ssResetPrefs');
+
+  if (btnReset) {
+    btnReset.addEventListener('click', function(){
+      if (!confirm("รีเซ็ตการตั้งค่าที่บันทึกไว้ (Stock filter + จำนวนแถว) สำหรับผู้ใช้นี้?")) return;
+      if (!userPrefClearUrl) { window.location.reload(); return; }
+
+      fetch(userPrefClearUrl, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ keys: ["supplier_stock.page_length", "supplier_stock.stock_filter"] })
+      }).finally(() => window.location.reload());
+    });
+  }
+
+  const tbody = document.getElementById('ssTbody');
+  const sentinel = document.getElementById('ssInfiniteSentinel');
+  const spinner = document.getElementById('ssInfiniteSpinner');
+  const text = document.getElementById('ssInfiniteText');
+  const scroller = document.getElementById('ssScroll');
+  if (!tbody || !sentinel || !scroller) return;
+
+  function setSupplierScrollHeight(){
+    // ระยะเผื่อใต้จอ (กันชน footer/ขอบล่าง)
+    const bottomGap = 24;
+
+    const footer = document.querySelector('footer');
+    const footerH = footer ? footer.getBoundingClientRect().height : 0;
+
+    const rect = scroller.getBoundingClientRect();
+    const h = window.innerHeight - rect.top - footerH - bottomGap;
+    const finalH = Math.max(260, Math.floor(h));
+    scroller.style.setProperty('--ss-scroll-h', finalH + 'px');
+  }
+
+  // Set immediately and keep updated on resize
+  setSupplierScrollHeight();
+  window.addEventListener('load', setSupplierScrollHeight);
+  window.addEventListener('resize', setSupplierScrollHeight);
+
+  const rowsApiUrl = "{{ url_for('api_supplier_stock_rows') }}";
+  let loading = false;
+
+  function getNumAttr(el, key, defVal){
+    const v = parseInt(String(el.getAttribute(key) || ''), 10);
+    return Number.isFinite(v) ? v : defVal;
+  }
+
+  async function loadMore(){
+    if (loading) return;
+
+    const key = String(tbody.dataset.key || '');
+    const total = getNumAttr(tbody, 'data-total', 0);
+    const pageSize = getNumAttr(tbody, 'data-pagesize', 200);
+    const loaded = getNumAttr(tbody, 'data-loaded', 0);
+
+    if (!key || loaded >= total) {
+      if (text) text.textContent = (total > 0) ? "ครบแล้ว" : "ไม่มีข้อมูล";
+      return;
+    }
+
+    loading = true;
+    if (spinner) spinner.classList.remove('d-none');
+    if (text) text.textContent = "กำลังโหลด...";
+
+    try{
+      const url = rowsApiUrl + "?key=" + encodeURIComponent(key) +
+                  "&offset=" + loaded + "&limit=" + pageSize;
+      const res = await fetch(url, {headers: {"Accept":"application/json"}});
+      const js = await res.json();
+
+      if (!js.success) {
+        if (text) text.textContent = js.msg || "โหลดไม่สำเร็จ (ลองรีเฟรชหน้า)";
+        return;
+      }
+
+      const wrap = document.createElement('tbody');
+      wrap.innerHTML = js.html || '';
+      while (wrap.firstChild) tbody.appendChild(wrap.firstChild);
+
+      const nextLoaded = js.next_offset || (loaded + pageSize);
+      tbody.setAttribute('data-loaded', String(nextLoaded));
+
+      if (!js.has_more) {
+        if (text) text.textContent = "ครบแล้ว";
+      } else {
+        if (text) text.textContent = "เลื่อนลงเพื่อโหลดเพิ่ม";
+      }
+    }catch(e){
+      if (text) text.textContent = "โหลดไม่สำเร็จ (ลองรีเฟรชหน้า)";
+    }finally{
+      loading = false;
+      if (spinner) spinner.classList.add('d-none');
+    }
+  }
+
+  const io = new IntersectionObserver((entries) => {
+    if (entries && entries[0] && entries[0].isIntersecting) loadMore();
+  }, {
+    root: scroller,
+    threshold: 0.1,
+    rootMargin: "120px"
+  });
+
+  io.observe(sentinel);
+
+  function buildExportUrl(layout) {
+    const p = new URLSearchParams();
+    p.set('layout', layout);
+
+    const sp = new URLSearchParams(window.location.search);
+    const supplier = sp.get('supplier');
+    if (supplier) p.set('supplier', supplier);
+
+    const exportAllEl = document.getElementById('ssExportAll');
+    const exportAll = exportAllEl ? !!exportAllEl.checked : false;
+
+    if (exportAll) {
+      p.set('export_all', '1');
+    } else {
+      const qv = (qEl && qEl.value ? qEl.value : '').trim();
+      if (qv) p.set('q', qv);
+
+      const stock = (stockEl && stockEl.value ? stockEl.value : 'all');
+      if (stock) p.set('stock', stock);
+
+      const brand = (brandEl && brandEl.value ? brandEl.value : '').trim();
+      if (brand) p.set('brand', brand);
+    }
+
+    const sort = (sortEl && sortEl.value ? sortEl.value : 'sku_asc');
+    if (sort) p.set('sort', sort);
+
+    return exportBaseUrl + '?' + p.toString();
+  }
+
+  document.querySelectorAll('.ss-export-item').forEach(function(el){
+    el.addEventListener('click', function(e){
+      e.preventDefault();
+      const layout = (el.getAttribute('data-layout') || 'template');
+      window.location.href = buildExportUrl(layout);
+    });
+  });
+})();
+</script>
+{% endblock %}

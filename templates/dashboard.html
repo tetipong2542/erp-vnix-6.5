@@ -1,0 +1,1348 @@
+
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+    /* --- Modern Dashboard CSS --- */
+    :root {
+        --card-radius: 16px;
+        --btn-radius: 10px;
+        --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
+        --shadow-md: 0 5px 15px rgba(0,0,0,0.08);
+        --shadow-hover: 0 8px 25px rgba(0,0,0,0.12);
+    }
+
+    /* KPI Cards Styling */
+    .kpi-card {
+        border: none;
+        border-radius: var(--card-radius);
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        overflow: hidden;
+        position: relative;
+        cursor: pointer;
+        box-shadow: var(--shadow-sm);
+        height: 100%;
+        min-height: 120px; /* เพิ่มความสูงนิดหน่อยให้ตัวเลขไม่อึดอัด */
+        text-decoration: none !important;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    .kpi-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-hover); }
+
+    /* Gradients */
+    .bg-gradient-fire { background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%); color: white; }
+    .bg-gradient-success { background: linear-gradient(135deg, #1dd1a1 0%, #10ac84 100%); color: white; }
+    .bg-gradient-warning { background: linear-gradient(135deg, #feca57 0%, #ff9f43 100%); color: white; }
+    .bg-gradient-danger { background: linear-gradient(135deg, #ff6b6b 0%, #ee5253 100%); color: white; }
+    .bg-gradient-info { background: linear-gradient(135deg, #48dbfb 0%, #0abde3 100%); color: white; }
+    .bg-gradient-dark { background: linear-gradient(135deg, #576574 0%, #222f3e 100%); color: white; }
+    .bg-gradient-secondary { background: linear-gradient(135deg, #dfe6e9 0%, #b2bec3 100%); color: #2d3436; }
+
+    /* Badge tone: Orange (match warning gradient end color) */
+    .badge-orange { background-color: #ff9f43 !important; color: #ffffff !important; }
+
+    .kpi-card-body { padding: 16px; position: relative; z-index: 2; }
+    
+    .kpi-title { font-size: 1.125rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.95; margin-bottom: 5px; font-weight: 700; }
+    .kpi-value { font-size: 2.6rem; font-weight: 800; line-height: 1; margin-bottom: 8px; }
+    
+    /* [แก้ไข] ปรับดีไซน์ป้าย เก่า/ใหม่ ให้ชัดเจน */
+    .kpi-sub { 
+        font-size: 0.85rem; 
+        background: rgba(0,0,0,0.15); /* พื้นหลังเข้มขึ้นนิดนึงให้อ่านง่าย */
+        padding: 6px 12px; 
+        border-radius: 8px; 
+        display: inline-flex; /* จัดเรียงแนวนอน */
+        align-items: center;
+        gap: 8px;
+        backdrop-filter: blur(4px);
+        font-weight: 600;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        width: fit-content;
+    }
+    
+    /* ตัวเลขเก่า (สีโทนร้อน/แดงอ่อน) */
+    .val-old { color: #ffe5e5; font-weight: 800; font-size: 1.1em; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+    /* ตัวเลขใหม่ (สีขาวสว่าง) */
+    .val-new { color: #ffffff; font-weight: 800; font-size: 1.1em; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+    
+    .divider { opacity: 0.6; font-weight: normal; font-size: 0.9em; }
+
+    /* Override Text Colors สำหรับการ์ดสีอ่อน (Warning/Secondary) */
+    .bg-gradient-warning .kpi-title, .bg-gradient-warning .kpi-value { text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    .bg-gradient-secondary .kpi-sub { background: rgba(0,0,0,0.08); color: #636e72; }
+    .bg-gradient-secondary .val-old { color: #d63031; } /* เก่าสีแดงเข้ม */
+    .bg-gradient-secondary .val-new { color: #2d3436; } /* ใหม่สีเข้ม */
+
+    .kpi-icon { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); font-size: 3rem; opacity: 0.15; z-index: 1; }
+
+    /* Filter & Table */
+    .section-label { font-size: 1rem; color: #57606f; font-weight: 700; margin: 25px 0 15px 0; display: flex; align-items: center; }
+    .section-label::after { content: ''; flex: 1; height: 2px; background: #f1f2f6; margin-left: 15px; border-radius: 2px; }
+    .filter-bar, .action-bar { background: #fff; padding: 15px 20px; border-radius: 12px; box-shadow: var(--shadow-sm); border: 1px solid #f1f2f6; margin-bottom: 20px; }
+    .table-container { border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm); border: 1px solid #dfe4ea; background: white; }
+    #ordersTable thead th { background-color: #f8f9fa; color: #2f3542; font-weight: 700; border-bottom: 2px solid #dfe4ea; vertical-align: middle; text-transform: uppercase; font-size: 0.8rem; }
+    #ordersTable td.order-cell { border-left: 3px solid #0d6efd !important; border-right: 2px solid #0d6efd !important; font-weight: 700; color: #0d6efd; vertical-align: middle; background-color: #f8faff !important; }
+    tr.order-group-start td.order-cell { border-top: 2px solid #0d6efd !important; }
+    tr.order-group-end td.order-cell { border-bottom: 2px solid #0d6efd !important; }
+    tr.cancelled-row { background-color: #ffeaea !important; opacity: 0.8; }
+    tr.cancelled-row td { text-decoration: line-through; color: #ff4757; }
+    tr.cancelled-row td.order-cell, tr.cancelled-row td:last-child { text-decoration: none; }
+    .btn-report { border-width: 1px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s; border-radius: var(--btn-radius); }
+    .btn-report:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+
+    /* ✅ ขยายหัวข้อในบล็อก ยกเลิก(ก่อน)/ยกเลิก(หลัง)/ถังขยะ (+25%) */
+    h6.text-muted.mb-1.text-uppercase.small.fw-bold {
+        font-size: 1.1rem !important;
+    }
+
+    /* ✅ ขยายคำว่า "วันนี้" ที่ถูกกำหนด inline style font-size:0.7rem (+25%) */
+    small.text-muted[style*="font-size:0.7rem"] {
+        font-size: 0.875rem !important;
+    }
+
+    /* Scan checkbox (dark blue) */
+    .scan-check {
+        width: 18px;
+        height: 18px;
+        accent-color: #0d47a1;
+        cursor: default;
+    }
+    .scan-check:disabled { opacity: 1; }
+
+    /* Warehouse receive section: Cool & Vibrant Tone (purple/teal/bronze/pink) */
+    .warehouse-section-label {
+        color: #6c5ce7 !important;
+    }
+    .warehouse-section-label::after {
+        background: rgba(108, 92, 231, 0.18) !important;
+    }
+    .warehouse-badge {
+        background-color: #a29bfe !important;
+        color: #2d3436 !important;
+        border-color: transparent !important;
+    }
+
+    .warehouse-kpi {
+        box-shadow: var(--shadow-md);
+        color: #ffffff;
+    }
+    .warehouse-kpi::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%);
+        z-index: 1;
+        pointer-events: none;
+    }
+    .warehouse-kpi .kpi-card-body { z-index: 2; }
+    .warehouse-kpi .kpi-icon { opacity: 0.20; }
+
+    .wh-tone-total {
+        background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%) !important;
+        color: #ffffff !important;
+    }
+    .wh-tone-g1 {
+        background: linear-gradient(135deg, #00b894 0%, #00cec9 100%) !important;
+        color: #ffffff !important;
+    }
+    .wh-tone-g2 {
+        background: linear-gradient(135deg, #e17055 0%, #fab1a0 100%) !important;
+        color: #ffffff !important;
+    }
+    .wh-tone-g3 {
+        background: linear-gradient(135deg, #e84393 0%, #fd79a8 100%) !important;
+        color: #ffffff !important;
+    }
+
+    /* Warehouse: small "สถานะเปลี่ยน" filter button */
+    .wh-change-link {
+        font-size: 0.80rem;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.18);
+        border: 1px solid rgba(255, 255, 255, 0.30);
+        color: #ffffff;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        line-height: 1;
+        transition: all 0.15s ease-in-out;
+        user-select: none;
+    }
+    .wh-change-link:hover {
+        background: rgba(255, 255, 255, 0.28);
+        transform: translateY(-1px);
+        color: #ffffff;
+    }
+    .wh-change-link.active {
+        background: rgba(0, 0, 0, 0.18);
+        border-color: rgba(0, 0, 0, 0.20);
+        font-weight: 800;
+    }
+    .wh-change-disabled {
+        font-size: 0.80rem;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.10);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        color: rgba(255, 255, 255, 0.85);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        line-height: 1;
+        user-select: none;
+    }
+    .wh-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        background: #ff4757;
+        box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.65);
+        animation: whPulse 1.4s infinite;
+    }
+    @keyframes whPulse {
+        0% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.55); }
+        70% { box-shadow: 0 0 0 10px rgba(255, 71, 87, 0.00); }
+        100% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.00); }
+    }
+
+    /* Edit SKU: autocomplete dropdown */
+    .sku-suggest {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 1080;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 10px;
+        box-shadow: var(--shadow-md);
+        overflow: hidden;
+        max-height: 260px;
+        overflow-y: auto;
+        display: none;
+    }
+    .sku-suggest.show { display: block; }
+    .sku-suggest .item {
+        padding: 10px 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid #f1f2f6;
+    }
+    .sku-suggest .item:last-child { border-bottom: none; }
+    .sku-suggest .item:hover { background: #f8faff; }
+    .sku-suggest .sku { font-weight: 800; color: #0d6efd; }
+    .sku-suggest .meta { font-size: 0.85rem; color: #57606f; }
+    .sku-suggest .stock {
+        font-weight: 800;
+        font-size: 0.85rem;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #e7f1ff;
+        color: #0d6efd;
+        white-space: nowrap;
+        align-self: center;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex align-items-center">
+        <div class="page-title-icon me-3" style="width:48px;height:48px;background:linear-gradient(135deg, #3742fa, #5352ed);color:white;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.8rem;box-shadow:0 4px 10px rgba(55,66,250,0.3);">📊</div>
+        <div>
+            <h3 class="mb-0 fw-bold text-dark">Dashboard</h3>
+            <div class="d-flex align-items-center gap-2 mt-1">
+                {% if all_time %}
+                    <span class="badge bg-info text-white rounded-pill px-3">📅 ข้อมูลทั้งหมด (All Time)</span>
+                {% elif mode == 'today' %}
+                    <span class="badge bg-success text-white rounded-pill px-3">📅 ข้อมูลเฉพาะวันนี้ (Today)</span>
+                {% elif use_default_view %}
+                    <span class="badge bg-primary text-white rounded-pill px-3">⚡ มุมมองปกติ (งานค้าง + งานจบวันนี้)</span>
+                {% else %}
+                    <span class="badge bg-secondary text-white rounded-pill px-3">🔍 มุมมองแบบกำหนดเอง (Filtered)</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% set _plat = platform_sel %}
+    {% set _shop = shop_sel %}
+    {% set _q = (q or '') %}
+    {% set _status = (status_sel or '') %}
+
+    <div class="btn-group shadow-sm" role="group" aria-label="Dashboard view">
+        <a href="{{ url_for('dashboard', platform=_plat, shop_id=_shop, q=_q, status=_status) }}"
+           class="btn btn-light border fw-bold {% if mode != 'today' and not all_time %}active{% endif %}"
+           style="border-radius:10px 0 0 10px;">
+            <i class="bi bi-layers me-1"></i> งานค้าง+งานจบวันนี้
+        </a>
+
+        <a href="{{ url_for('dashboard', mode='today', platform=_plat, shop_id=_shop, q=_q, status=_status) }}"
+           class="btn btn-primary fw-bold {% if mode == 'today' %}active{% endif %}"
+           style="border-radius:0 10px 10px 0;">
+            <i class="bi bi-calendar-check me-1"></i> เฉพาะวันนี้
+        </a>
+    </div>
+</div>
+
+<div class="section-label text-danger">
+    <i class="bi bi-fire me-2 fs-5"></i> 
+    <span>งานค้างที่ต้องจัดการ (Pending Tasks)</span> 
+    <span class="ms-2 badge bg-light text-danger border border-danger rounded-pill">ด่วน</span>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3 col-lg-2">
+        <div class="kpi-card bg-gradient-fire kpi-filter" data-status="" title="คลิกเพื่อดูทั้งหมด">
+            <div class="kpi-card-body">
+                <div class="kpi-title">รวมงานค้าง</div>
+                <div class="kpi-value">{{ kpis.orders_unique }}</div>
+                <div class="kpi-sub">
+                    <span class="val-old">ค้าง {{ kpis.orders_unique_old }}</span>
+                    <span class="divider">|</span>
+                    <span class="val-new">วันนี้ {{ kpis.orders_unique_new }}</span>
+                </div>
+                <i class="bi bi-inbox kpi-icon"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-md-3 col-lg-2">
+        <div class="kpi-card bg-gradient-success kpi-filter" data-status="ORDER_READY" title="คลิกเพื่อดูกอง 1">
+            <div class="kpi-card-body">
+                <div class="kpi-title">กอง 1 (พร้อม/ยังไม่จ่ายงาน)</div>
+                <div class="kpi-value">{{ kpis.orders_ready }}</div>
+                <div class="kpi-sub">
+                    <span class="val-old">ค้าง {{ kpis.orders_ready_old }}</span>
+                    <span class="divider">|</span>
+                    <span class="val-new">วันนี้ {{ kpis.orders_ready_new }}</span>
+                </div>
+                <i class="bi bi-check-circle kpi-icon"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-md-3 col-lg-2">
+        <div class="kpi-card bg-gradient-warning kpi-filter" data-status="ORDER_LOW_STOCK" title="คลิกเพื่อดูกอง 2">
+            <div class="kpi-card-body">
+                <div class="kpi-title">กอง 2 (น้อย/ยังไม่จ่ายงาน)</div>
+                <div class="kpi-value">{{ kpis.orders_low }}</div>
+                <div class="kpi-sub">
+                    <span class="val-old">ค้าง {{ kpis.orders_low_old }}</span>
+                    <span class="divider">|</span>
+                    <span class="val-new">วันนี้ {{ kpis.orders_low_new }}</span>
+                </div>
+                <i class="bi bi-exclamation-triangle kpi-icon"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-md-3 col-lg-2">
+        <div class="kpi-card bg-gradient-danger kpi-filter" data-status="ORDER_PROBLEM" title="คลิกเพื่อดูกอง 3">
+            <div class="kpi-card-body">
+                <div class="kpi-title">กอง 3 (ของขาด/ยังไม่จ่ายงาน)</div>
+                <div class="kpi-value">{{ kpis.orders_problem }}</div>
+                <div class="kpi-sub">
+                    <span class="val-old">ค้าง {{ kpis.orders_problem_old }}</span>
+                    <span class="divider">|</span>
+                    <span class="val-new">วันนี้ {{ kpis.orders_problem_new }}</span>
+                </div>
+                <i class="bi bi-x-octagon kpi-icon"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-12 col-lg-4">
+        <div class="row g-2 h-100">
+            <div class="col-12 col-sm-6 col-md-4">
+                <div class="kpi-card bg-gradient-secondary kpi-filter" data-status="ORDER_NO_SALES">
+                    <div class="kpi-card-body">
+                        <div class="kpi-title text-dark">ยังไม่ได้แพ็ค</div>
+                        <div class="kpi-value text-dark">{{ kpis.orders_nosales }}</div>
+                        <div class="kpi-sub">
+                            <span class="val-old">ค้าง {{ kpis.orders_nosales_old }}</span>
+                            <span class="divider">|</span>
+                            <span class="val-new">วันนี้ {{ kpis.orders_nosales_new }}</span>
+                        </div>
+                        <i class="bi bi-file-earmark-x kpi-icon text-dark opacity-25"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-sm-6 col-md-4">
+                <div class="kpi-card bg-gradient-secondary kpi-filter" data-status="ORDER_NOT_IN_SBS">
+                    <div class="kpi-card-body">
+                        <div class="kpi-title text-dark">ยังไม่นำเข้า SBS</div>
+                        <div class="kpi-value text-dark">{{ kpis.orders_not_in_sbs }}</div>
+                        <div class="kpi-sub">
+                            <span class="val-old">ค้าง {{ kpis.orders_not_in_sbs_old }}</span>
+                            <span class="divider">|</span>
+                            <span class="val-new">วันนี้ {{ kpis.orders_not_in_sbs_new }}</span>
+                        </div>
+                        <i class="bi bi-cloud-slash kpi-icon text-dark opacity-25"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scan Barcode (นับเฉพาะงานค้างที่ยังไม่สแกน) -->
+            <div class="col-12 col-sm-6 col-md-4">
+                <div class="kpi-card bg-gradient-info kpi-filter" data-status="ORDER_NOT_SCANNED" title="คลิกเพื่อดู Order ที่ยังไม่สแกน">
+                    <div class="kpi-card-body">
+                        <div class="kpi-title">รอ Scan Barcode</div>
+                        <div class="kpi-value">{{ kpis.orders_not_scanned }}</div>
+                        <div class="kpi-sub">
+                            <span class="val-old">ค้าง {{ kpis.orders_not_scanned_old }}</span>
+                            <span class="divider">|</span>
+                            <span class="val-new">วันนี้ {{ kpis.orders_not_scanned_new }}</span>
+                        </div>
+                        <i class="bi bi-upc-scan kpi-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="section-label text-primary">
+    <i class="bi bi-flag-fill me-2 fs-5"></i> 
+    <span>งานจบวันนี้ (Completed Today)</span>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3 col-lg-3">
+        <a href="{{ url_for('dashboard_issued') }}" class="kpi-card bg-gradient-info text-decoration-none">
+            <div class="kpi-card-body">
+                <div class="kpi-title">จ่ายงานแล้ว</div>
+                <div class="kpi-value">{{ issued_count or 0 }}</div>
+                <div class="kpi-sub"><i class="bi bi-calendar-check me-1"></i> เฉพาะวันนี้</div>
+                <i class="bi bi-send kpi-icon"></i>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-6 col-md-3 col-lg-3">
+        <div class="kpi-card bg-gradient-dark kpi-filter" data-status="PACKED">
+            <div class="kpi-card-body">
+                <div class="kpi-title">แพ็คแล้ว</div>
+                <div class="kpi-value">{{ kpis.packed }}</div>
+                <div class="kpi-sub"><i class="bi bi-calendar-check me-1"></i> เฉพาะวันนี้</div>
+                <i class="bi bi-box-seam kpi-icon"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-lg-6">
+        <div class="card border-0 shadow-sm h-100" style="border-radius: var(--card-radius); background-color: #f8f9fa;">
+            <div class="card-body d-flex justify-content-around align-items-center p-0">
+                <div class="text-center kpi-filter flex-grow-1 p-3 h-100 d-flex flex-column justify-content-center" data-status="ORDER_CANCELLED" style="cursor:pointer; border-right:1px solid #dee2e6;">
+                    <h6 class="text-muted mb-1 text-uppercase small fw-bold">ยกเลิก(ก่อนแพ็ค)</h6>
+                    <span class="fs-2 fw-bold text-secondary">{{ kpis.orders_cancelled }}</span>
+                    <small class="text-muted" style="font-size:0.7rem;">วันนี้</small>
+                </div>
+                <div class="text-center kpi-filter flex-grow-1 p-3 h-100 d-flex flex-column justify-content-center" data-status="ORDER_CANCELLED_PACKED" style="cursor:pointer; border-right:1px solid #dee2e6;">
+                    <h6 class="text-muted mb-1 text-uppercase small fw-bold">ยกเลิก(หลังแพ็ค)</h6>
+                    <span class="fs-2 fw-bold text-danger">{{ kpis.orders_cancelled_packed }}</span>
+                    <small class="text-muted" style="font-size:0.7rem;">วันนี้</small>
+                </div>
+                <a href="{{ url_for('dashboard_deleted') }}" class="text-center text-decoration-none flex-grow-1 p-3 h-100 d-flex flex-column justify-content-center">
+                    <h6 class="text-muted mb-1 text-uppercase small fw-bold"><i class="bi bi-trash"></i> ถังขยะ(ลบOrder)</h6>
+                    <span class="fs-2 fw-bold text-secondary">{{ kpis.orders_deleted }}</span>
+                    <small class="text-muted" style="font-size:0.7rem;">วันนี้</small>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="section-label warehouse-section-label">
+    <i class="bi bi-box-seam-fill me-2 fs-5"></i>
+    <span>คลังรับงาน (รับแล้ว/ยังไม่แพ็ค)</span>
+    <span class="ms-2 badge rounded-pill warehouse-badge">กำลังดำเนินการ</span>
+    {% if change_filter %}
+        <a href="{{ url_for('dashboard', platform=platform_sel, shop_id=shop_sel) }}" class="ms-3 btn btn-sm btn-outline-secondary rounded-pill px-3" style="border-width:1px;">
+            <i class="bi bi-x-circle"></i> ล้างตัวกรองสถานะเปลี่ยน
+        </a>
+    {% endif %}
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3 col-lg-3">
+        <div class="kpi-card warehouse-kpi wh-tone-total kpi-filter" data-status="WH_RECEIVE_TOTAL" title="คลิกเพื่อดูรวม: คลังรับงานที่ยังไม่แพ็ค">
+            <div class="kpi-card-body">
+                <div class="kpi-title">รวมงานค้าง (คลังรับงาน/ยังไม่ได้แพ็ค)</div>
+                <div class="kpi-value">{{ kpis.wh_receive_total }}</div>
+                <div class="kpi-sub">
+                    <span class="val-old">ค้าง {{ kpis.wh_receive_total_old }}</span>
+                    <span class="divider">|</span>
+                    <span class="val-new">วันนี้ {{ kpis.wh_receive_total_new }}</span>
+                </div>
+                <div class="mt-2">
+                    {% if kpis.wh_change_total and kpis.wh_change_total > 0 %}
+                        <a class="wh-change-link {% if change_filter == 'TOTAL' %}active{% endif %}"
+                                    href="{{ url_for('dashboard', show_change='TOTAL', platform=platform_sel, shop_id=shop_sel) }}"
+                           onclick="event.stopPropagation(); sessionStorage.setItem('scrollToOrders','1');">
+                            <span class="wh-dot"></span>
+                            <span>สถานะเปลี่ยน {{ kpis.wh_change_total }}</span>
+                        </a>
+                    {% else %}
+                        <span class="wh-change-disabled"><i class="bi bi-arrow-left-right"></i> สถานะเปลี่ยน 0</span>
+                    {% endif %}
+                </div>
+                <i class="bi bi-layers kpi-icon"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-md-3 col-lg-3">
+        <div class="kpi-card warehouse-kpi wh-tone-g1 kpi-filter" data-status="WH_RECEIVE_G1" title="คลิกเพื่อดู: กอง 1 (ใบงานคลัง + Picking)">
+            <div class="kpi-card-body">
+                <div class="kpi-title">กอง 1 (รับแล้ว/ยังไม่แพ็ค)</div>
+                <div class="kpi-value">{{ kpis.wh_receive_g1 }}</div>
+                <div class="kpi-sub">
+                    <span class="val-old">ค้าง {{ kpis.wh_receive_g1_old }}</span>
+                    <span class="divider">|</span>
+                    <span class="val-new">วันนี้ {{ kpis.wh_receive_g1_new }}</span>
+                </div>
+                <div class="mt-2">
+                    {% if kpis.wh_change_g1 and kpis.wh_change_g1 > 0 %}
+                        <a class="wh-change-link {% if change_filter == 'G1' %}active{% endif %}"
+                                    href="{{ url_for('dashboard', show_change='G1', platform=platform_sel, shop_id=shop_sel) }}"
+                           onclick="event.stopPropagation(); sessionStorage.setItem('scrollToOrders','1');">
+                            <span class="wh-dot"></span>
+                            <span>สถานะเปลี่ยน {{ kpis.wh_change_g1 }}</span>
+                        </a>
+                    {% else %}
+                        <span class="wh-change-disabled"><i class="bi bi-arrow-left-right"></i> สถานะเปลี่ยน 0</span>
+                    {% endif %}
+                </div>
+                <i class="bi bi-clipboard-check kpi-icon"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-md-3 col-lg-3">
+        <div class="kpi-card warehouse-kpi wh-tone-g2 kpi-filter" data-status="WH_RECEIVE_G2" title="คลิกเพื่อดู: กอง 2 (สินค้าน้อย)">
+            <div class="kpi-card-body">
+                <div class="kpi-title">กอง 2 (รับแล้ว/ยังไม่แพ็ค)</div>
+                <div class="kpi-value">{{ kpis.wh_receive_g2 }}</div>
+                <div class="kpi-sub">
+                    <span class="val-old">ค้าง {{ kpis.wh_receive_g2_old }}</span>
+                    <span class="divider">|</span>
+                    <span class="val-new">วันนี้ {{ kpis.wh_receive_g2_new }}</span>
+                </div>
+                <div class="mt-2">
+                    {% if kpis.wh_change_g2 and kpis.wh_change_g2 > 0 %}
+                        <a class="wh-change-link {% if change_filter == 'G2' %}active{% endif %}"
+                                    href="{{ url_for('dashboard', show_change='G2', platform=platform_sel, shop_id=shop_sel) }}"
+                           onclick="event.stopPropagation(); sessionStorage.setItem('scrollToOrders','1');">
+                            <span class="wh-dot"></span>
+                            <span>สถานะเปลี่ยน {{ kpis.wh_change_g2 }}</span>
+                        </a>
+                    {% else %}
+                        <span class="wh-change-disabled"><i class="bi bi-arrow-left-right"></i> สถานะเปลี่ยน 0</span>
+                    {% endif %}
+                </div>
+                <i class="bi bi-exclamation-triangle kpi-icon"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-md-3 col-lg-3">
+        <div class="kpi-card warehouse-kpi wh-tone-g3 kpi-filter" data-status="WH_RECEIVE_G3" title="คลิกเพื่อดู: กอง 3 (ไม่มีสินค้า + ไม่พอส่ง)">
+            <div class="kpi-card-body">
+                <div class="kpi-title">กอง 3 (รับแล้ว/ยังไม่แพ็ค)</div>
+                <div class="kpi-value">{{ kpis.wh_receive_g3 }}</div>
+                <div class="kpi-sub">
+                    <span class="val-old">ค้าง {{ kpis.wh_receive_g3_old }}</span>
+                    <span class="divider">|</span>
+                    <span class="val-new">วันนี้ {{ kpis.wh_receive_g3_new }}</span>
+                </div>
+                <div class="mt-2">
+                    {% if kpis.wh_change_g3 and kpis.wh_change_g3 > 0 %}
+                        <a class="wh-change-link {% if change_filter == 'G3' %}active{% endif %}"
+                                    href="{{ url_for('dashboard', show_change='G3', platform=platform_sel, shop_id=shop_sel) }}"
+                           onclick="event.stopPropagation(); sessionStorage.setItem('scrollToOrders','1');">
+                            <span class="wh-dot"></span>
+                            <span>สถานะเปลี่ยน {{ kpis.wh_change_g3 }}</span>
+                        </a>
+                    {% else %}
+                        <span class="wh-change-disabled"><i class="bi bi-arrow-left-right"></i> สถานะเปลี่ยน 0</span>
+                    {% endif %}
+                </div>
+                <i class="bi bi-x-octagon kpi-icon"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="action-bar d-flex flex-wrap gap-2 align-items-center">
+    <span class="text-muted small fw-bold text-uppercase me-2 d-none d-md-block"><i class="bi bi-printer-fill me-1"></i>Scan Barcode/พิมพ์งาน/จ่ายงาน:</span>
+    
+    <div class="btn-group">
+        <a href="{{ url_for('print_warehouse', platform=platform_sel, shop_id=shop_sel) }}" class="btn btn-report btn-outline-primary fw-bold">
+            <i class="bi bi-file-earmark-text"></i> กอง 1: ใบงานคลัง
+        </a>
+        <button type="button" class="btn btn-outline-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown"></button>
+        <ul class="dropdown-menu shadow">
+            <li><a class="dropdown-item" href="{{ url_for('warehouse_printed_history') }}"><i class="bi bi-clock-history me-2"></i> ดูประวัติการพิมพ์</a></li>
+        </ul>
+    </div>
+
+    <div class="btn-group">
+        <a href="{{ url_for('picking_list', platform=platform_sel, shop_id=shop_sel) }}" class="btn btn-report btn-outline-success fw-bold">
+            <i class="bi bi-basket"></i> Picking List
+        </a>
+        <button type="button" class="btn btn-outline-success dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown"></button>
+        <ul class="dropdown-menu shadow">
+            <li><a class="dropdown-item" href="{{ url_for('picking_printed_history') }}"><i class="bi bi-clock-history me-2"></i> ดูประวัติการพิมพ์</a></li>
+        </ul>
+    </div>
+    
+    <div class="vr bg-secondary opacity-25 mx-1 d-none d-md-block"></div>
+
+    <a href="{{ url_for('report_lowstock', platform=platform_sel, shop_id=shop_sel) }}" class="btn btn-report btn-outline-warning text-dark fw-bold">
+        <i class="bi bi-exclamation-circle"></i> กอง 2: สินค้าน้อย
+    </a>
+    <a href="{{ url_for('report_nostock', platform=platform_sel, shop_id=shop_sel) }}" class="btn btn-report btn-outline-danger fw-bold">
+        <i class="bi bi-x-circle"></i> กอง 3: ไม่มีสินค้า
+    </a>
+    <a href="{{ url_for('report_notenough', platform=platform_sel, shop_id=shop_sel) }}" class="btn btn-report btn-outline-danger fw-bold">
+        <i class="bi bi-dash-circle"></i> กอง 3: ไม่พอส่ง
+    </a>
+    <a href="{{ url_for('report_purchase_g3', platform=platform_sel, shop_id=shop_sel) }}" class="btn btn-report btn-outline-dark fw-bold">
+        <i class="bi bi-cart-check"></i> กอง 3: รายงานจัดซื้อ
+    </a>
+
+    {% set has_any_date = (import_from_sel or import_to_sel or date_from_sel or date_to_sel) %}
+
+    <div class="ms-auto">
+        <a href="{{ url_for(
+            'export_excel',
+            platform=platform_sel,
+            shop_id=shop_sel,
+            status=(status_sel or ''),
+            q=q,
+            import_from=import_from_sel,
+            import_to=import_to_sel,
+            date_from=date_from_sel,
+            date_to=date_to_sel,
+            all_time=('1' if (all_time and not has_any_date) else none),
+            mode=(mode if (mode and not has_any_date) else none)
+        ) }}" class="btn btn-success text-white shadow-sm fw-bold" style="border-radius: 10px;">
+            <i class="bi bi-file-earmark-excel-fill"></i> Excel
+        </a>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <form class="row gy-3 gx-3 align-items-end" method="get" id="filterForm">
+        {% if all_time and not has_any_date %}
+            <input type="hidden" name="all_time" value="1">
+        {% endif %}
+        {% if mode and not has_any_date %}
+            <input type="hidden" name="mode" value="{{ mode }}">
+        {% endif %}
+
+        <div class="col-md-2">
+            <label class="form-label text-muted small fw-bold mb-1">แพลตฟอร์ม</label>
+            <select class="form-select form-select-sm bg-light border-0" name="platform">
+                <option value="">ทั้งหมด</option>
+                {% for p in ["Shopee","TikTok","Lazada","อื่นๆ"] %}
+                    <option value="{{p}}" {% if platform_sel==p %}selected{% endif %}>{{p}}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label text-muted small fw-bold mb-1">ร้านค้า</label>
+            <select class="form-select form-select-sm bg-light border-0" name="shop_id">
+                <option value="">ทั้งหมด</option>
+                {% for s in shops %}
+                    <option value="{{ s.id }}" {% if shop_sel and shop_sel|int==s.id %}selected{% endif %}>
+                        {{ s.platform }} • {{ s.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="col-md-2">
+            <label class="form-label text-muted small fw-bold mb-1">นำเข้า (เริ่ม)</label>
+            <input type="date" class="form-control form-control-sm bg-light border-0" name="import_from" value="{{ import_from_sel or '' }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label text-muted small fw-bold mb-1">นำเข้า (ถึง)</label>
+            <input type="date" class="form-control form-control-sm bg-light border-0" name="import_to" value="{{ import_to_sel or '' }}">
+        </div>
+        
+        <div class="col-md-4">
+            <label class="form-label text-muted small fw-bold mb-1">🔍 ค้นหา (Global Search)</label>
+            <div class="input-group input-group-sm">
+                <input type="text" class="form-control bg-light border-0" name="q" value="{{ q or '' }}" placeholder="เลข Order, SKU, สินค้า...">
+                <button class="btn btn-primary px-4" type="submit" id="btn-filter"><i class="bi bi-search"></i></button>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-light border" title="ล้างค่า"><i class="bi bi-arrow-counterclockwise"></i></a>
+            </div>
+        </div>
+
+    <input type="hidden" name="status" value="{{ status_sel or '' }}">
+        
+        <div class="col-md-2 mt-2">
+            <label class="form-label text-muted small fw-bold mb-1">สั่งซื้อ (เริ่ม)</label>
+            <input type="date" class="form-control form-control-sm bg-light border-0" name="date_from" value="{{ date_from_sel or '' }}">
+        </div>
+        <div class="col-md-2 mt-2">
+            <label class="form-label text-muted small fw-bold mb-1">สั่งซื้อ (ถึง)</label>
+            <input type="date" class="form-control form-control-sm bg-light border-0" name="date_to" value="{{ date_to_sel or '' }}">
+        </div>
+        
+        <div class="col-md-8 mt-2 d-flex align-items-center justify-content-end gap-2">
+             {% if not all_time %}
+                <a href="{{ url_for('dashboard', all_time='1') }}" class="btn btn-sm btn-outline-info rounded-pill px-3">
+                    <i class="bi bi-calendar3"></i> ดูยอดสะสมทั้งหมด (All Time)
+                </a>
+            {% else %}
+                <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-info text-white rounded-pill px-3">
+                    <i class="bi bi-check-circle"></i> กำลังดู All Time
+                </a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<div id="bulk-bar" class="alert alert-primary d-none d-flex justify-content-between align-items-center shadow-sm py-2 mb-3 rounded-pill px-4 border-0" style="background-color: #e7f1ff; color: #0d6efd;">
+    <div class="d-flex align-items-center">
+        <i class="bi bi-check-square-fill me-2 fs-5"></i>
+        <span class="fw-bold">เลือก <span id="selected-count" class="badge bg-primary text-white fs-6 mx-1 rounded-pill">0</span> รายการ</span>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-primary fw-bold rounded-pill px-3" id="btn-bulk-accept-confirm"><i class="bi bi-check-lg"></i> กดรับงาน</button>
+        <button class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-3" id="btn-bulk-cancel"><i class="bi bi-arrow-counterclockwise"></i> ยกเลิกรับ</button>
+        <div class="vr bg-secondary opacity-25 mx-1"></div>
+        <button class="btn btn-sm btn-danger fw-bold rounded-pill px-3" onclick="confirmBulkDeleteOrders()"><i class="bi bi-trash"></i> ลบ</button>
+        <button class="btn btn-sm btn-light text-muted rounded-circle" id="btn-bulk-clear"><i class="bi bi-x-lg"></i></button>
+    </div>
+</div>
+<form id="bulk-delete-form" method="post" action="{{ url_for('bulk_delete_orders') }}"></form>
+
+<div class="table-container" id="ordersTableSection">
+    <table id="ordersTable" class="table table-hover align-middle mb-0" style="width:100%">
+        <thead>
+            <tr>
+                <th class="text-center" width="30"><input type="checkbox" id="check-all" class="form-check-input" style="cursor:pointer;"></th>
+                <th>Platform</th>
+                <th>ร้าน</th>
+                <th>เลข Order</th>
+                <th>สินค้า (SKU)</th>
+                <th>Brand</th>
+                <th>Stock</th>
+                <th>Qty</th>
+                <th>AllQty</th>
+                <th>เวลาสั่ง</th>
+                <th>SLA</th>
+                <th>ขนส่ง</th>
+                <th>สถานะ</th>
+                <th>การกระทำ</th>
+                <th class="text-center">Scan Order</th>
+                <th>ผู้รับ</th>
+                <th>หมายเหตุ</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            {% set overdue = (r.sla and r.sla.startswith('เลยกำหนด')) and (r.allocation_status != 'PACKED') %}
+            {% set can_accept = (r.allocation_status == 'READY_ACCEPT') %}
+            {% set is_order_ready = (r.order_id in ready_oids) %}
+            <tr class="{% if r.is_cancelled %}cancelled-row{% elif overdue %}table-danger{% endif %}" data-order-id="{{ r.order_id }}">
+                <td class="text-center">
+                    <input type="checkbox" class="form-check-input js-row-check" 
+                           data-id="{{ r.id }}" 
+                           value="{{ r.id }}"
+                           data-can-accept="{{ 'true' if can_accept else 'false' }}"
+                           data-order-ready="{{ 'true' if is_order_ready else 'false' }}">
+                </td>
+                <td><span class="badge bg-light text-dark border">{{ r.platform }}</span></td>
+                <td class="small text-muted">{{ r.shop }}</td>
+                <td class="order-cell fw-bold text-primary text-nowrap">{{ r.order_id }}</td>
+                <td>
+                    <div class="fw-bold text-dark">{{ r.sku }}</div>
+                    <div class="small text-muted text-truncate" style="max-width: 200px;">{{ r.model }}</div>
+                </td>
+                <td class="small">{{ r.brand }}</td>
+                <td class="text-center">
+                    {# Map Stock badge color to Card meaning:
+                       - LOW_STOCK  -> Yellow (กอง 2)
+                       - NOT_ENOUGH -> Orange (ไม่พอส่ง)
+                       - SHORTAGE   -> Red (ไม่มีของ/หมด)
+                       Fallback to qty comparison if status missing.
+                    #}
+                    {% if r.allocation_status == 'SHORTAGE' or r.stock_qty <= 0 %}
+                        <span class="badge bg-danger rounded-pill px-2">{{ r.stock_qty }}</span>
+                    {% elif r.allocation_status == 'NOT_ENOUGH' or r.stock_qty < r.qty %}
+                        <span class="badge badge-orange rounded-pill px-2">{{ r.stock_qty }}</span>
+                    {% elif r.allocation_status == 'LOW_STOCK' %}
+                        <span class="badge bg-warning text-dark rounded-pill px-2">{{ r.stock_qty }}</span>
+                    {% else %}
+                        <span class="badge bg-success rounded-pill px-2">{{ r.stock_qty }}</span>
+                    {% endif %}
+                </td>
+                <td class="text-center"><span class="badge bg-light text-dark border px-2 rounded-pill">{{ r.qty }}</span></td>
+                <td class="text-center small text-muted">{{ r.allqty }}</td>
+                <td class="small text-muted text-nowrap">{{ r.order_time|thai_be }}</td>
+                <td class="small text-nowrap">{{ r.sla }}</td>
+                <td class="small text-truncate" style="max-width: 100px;">{{ r.logistic or '-' }}</td>
+                <td>
+                    {% if r.status_change %}
+                        <div class="mb-1">
+                            <span class="badge {{ r.status_change.cls }} me-1" style="font-size:0.72rem;">
+                                <i class="bi {{ r.status_change.icon }} me-1"></i>{{ r.status_change.label }}
+                            </span>
+                        </div>
+                    {% endif %}
+
+                    {% if r.card_tags and r.card_tags|length > 0 %}
+                        <div class="mb-1">
+                            {% for t in r.card_tags %}
+                                <span class="badge {{ t.cls }} me-1" style="font-size:0.72rem;">{{ t.label }}</span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {% if r.is_issued %}
+                        <span class="badge bg-info text-dark">จ่ายแล้ว</span>
+                    {% elif r.allocation_status == "READY_ACCEPT" %}
+                        <span class="badge bg-success">พร้อมรับ</span>
+                    {% elif r.allocation_status == "ACCEPTED" %}
+                        <span class="badge bg-secondary">รับแล้ว</span>
+                    {% elif r.allocation_status == "LOW_STOCK" %}
+                        <span class="badge bg-warning text-dark">สินค้าน้อย</span>
+                    {% elif r.allocation_status == "SHORTAGE" %}
+                        <span class="badge bg-danger">สินค้าหมด</span>
+                    {% elif r.allocation_status == "NOT_ENOUGH" %}
+                        <span class="badge badge-orange">ไม่พอส่ง</span>
+                    {% elif r.allocation_status == "PACKED" %}
+                        <span class="badge bg-dark">แพ็คแล้ว</span>
+                    {% else %}
+                        <span class="badge bg-light text-dark">{{ r.allocation_status }}</span>
+                    {% endif %}
+                </td>
+                <td class="text-nowrap">
+                    {% if not r.is_cancelled %}
+                        {% if r.is_issued %}
+                            <button class="btn btn-sm btn-secondary disabled opacity-50" style="font-size:0.7rem;">จ่ายแล้ว</button>
+                        {% elif r.accepted %}
+                            <form method="post" action="{{ url_for('cancel_accept', order_line_id=r.id) }}" class="d-inline">
+                                <button class="btn btn-sm btn-warning text-dark py-0 px-2" title="ถอยกลับ" style="font-size:0.75rem; border-radius:6px;"><i class="bi bi-arrow-counterclockwise"></i> ถอย</button>
+                            </form>
+                        {# [แก้ไข] เช็คเพิ่มว่า Order ID นี้ต้องอยู่ในรายการที่ "พร้อมทั้งใบ" (ready_oids) เท่านั้น #}
+                        {% elif r.allocation_status == "READY_ACCEPT" and r.order_id in ready_oids %}
+                            <form method="post" action="{{ url_for('dashboard_accept_order') }}" class="d-inline">
+                                <input type="hidden" name="order_id" value="{{ r.order_id }}">
+                                <input type="hidden" name="sku" value="{{ r.sku }}">
+                                <input type="hidden" name="platform" value="{{ platform_sel or '' }}">
+                                <input type="hidden" name="shop_id" value="{{ shop_sel or '' }}">
+                                <button class="btn btn-sm btn-success py-0 px-2 fw-bold" title="กดรับงาน" style="font-size:0.75rem; border-radius:6px;"><i class="bi bi-check"></i> รับ</button>
+                            </form>
+                        {# [เพิ่ม] ถ้าสถานะ Ready แต่ของตัวอื่นในออเดอร์ไม่พร้อม ให้โชว์ปุ่มเทา (กดไม่ได้) #}
+                        {% elif r.allocation_status == "READY_ACCEPT" %}
+                             <button class="btn btn-sm btn-light text-muted border py-0 px-2" disabled style="font-size:0.75rem; border-radius:6px;" title="รอสินค้าอื่นในออเดอร์ให้ครบ"><i class="bi bi-hourglass"></i> รอครบ</button>
+                        {% else %}
+                             <button class="btn btn-sm btn-light text-muted border py-0 px-2" disabled style="font-size:0.75rem; border-radius:6px;"><i class="bi bi-x"></i> รับ</button>
+                        {% endif %}
+                        
+                        {% if r.allocation_status != 'PACKED' %}
+                            <button class="btn btn-sm btn-outline-danger py-0 px-2 ms-1" onclick="openCancelModal('{{ r.order_id }}')" title="ยกเลิก" style="font-size:0.75rem; border-radius:6px;"><i class="bi bi-trash"></i></button>
+                        {% endif %}
+
+                        {# Edit SKU: ต่อแถว (OrderLine) #}
+                        {% if r.allocation_status != 'PACKED' %}
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-secondary py-0 px-2 ms-1 js-edit-sku"
+                                    style="font-size:0.75rem; border-radius:6px;"
+                                    title="แก้ไขสินค้า (SKU)"
+                                    data-orderline-id="{{ r.id }}"
+                                    data-order-id="{{ r.order_id }}"
+                                    data-old-sku="{{ r.sku }}"
+                                    data-brand="{{ r.brand }}"
+                                    data-model="{{ r.model }}"
+                                    data-qty="{{ r.qty }}"
+                                    data-accepted="{{ '1' if r.accepted else '0' }}"
+                                    data-issued="{{ '1' if r.is_issued else '0' }}"
+                                    onclick="event.stopPropagation();">
+                                <i class="bi bi-pencil-square"></i> แก้สินค้า
+                            </button>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-muted small">-</span>
+                    {% endif %}
+                </td>
+
+                <td class="text-center">
+                    <input type="checkbox" class="form-check-input scan-check" disabled {% if r.scanned_at %}checked{% endif %}>
+                </td>
+
+                <td class="small text-muted">{{ r.accepted_by or '-' }}</td>
+                <td class="small text-muted">
+                    {% if r.is_cancelled %}
+                        <span class="text-danger small"><i class="bi bi-info-circle"></i> {{ r.cancel_reason }}</span>
+                    {% else %}
+                        {{ r.note or '-' }}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="modal fade" id="cancelOrderModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+      <div class="modal-header bg-danger text-white" style="border-radius: 15px 15px 0 0;">
+        <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill me-2"></i> ยืนยันการยกเลิก Order</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('cancel_order_permanent') }}" id="cancelOrderForm">
+        <div class="modal-body p-4">
+          <div class="alert alert-warning border-0 bg-light d-flex align-items-center">
+             <i class="bi bi-info-circle text-warning fs-4 me-3"></i>
+             <div>คุณกำลังจะยกเลิก Order: <strong id="modalOrderIdDisplay" class="text-primary fs-5"></strong></div>
+          </div>
+          <input type="hidden" name="order_id" id="inputOrderIdForCancel">
+          {% for key, val in request.args.items() %}<input type="hidden" name="{{ key }}" value="{{ val }}">{% endfor %}
+          <div class="mb-3">
+            <label class="form-label fw-bold text-danger">ระบุสาเหตุการยกเลิก *</label>
+            <textarea name="reason" id="cancelReasonInput" class="form-control bg-light" rows="3" required placeholder="เช่น ลูกค้ายกเลิก, สินค้าหมดถาวร" style="border-radius: 10px;"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-0" style="border-radius: 0 0 15px 15px;">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">ปิด</button>
+          <button type="submit" class="btn btn-danger fw-bold px-4">ยืนยันยกเลิก</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# ========= Edit SKU Modal (OrderLine) ========= #}
+<div class="modal fade" id="editSkuModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <div class="modal-header" style="border-radius: 15px 15px 0 0; background: linear-gradient(135deg, #0d6efd, #0a58ca); color: #fff;">
+                <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i> แก้ไขสินค้า (SKU)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <form method="post" action="{{ url_for('edit_orderline_sku') }}" id="editSkuForm">
+                <div class="modal-body p-4">
+                    <input type="hidden" name="orderline_id" id="editSkuOrderlineId">
+                    <input type="hidden" name="next" id="editSkuNextUrl">
+
+                    <div id="editSkuWarnBox" class="alert alert-warning d-none" style="border-radius: 12px;">
+                        <div class="fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i> คำเตือน</div>
+                        <div class="small">รายการนี้เคย <span class="fw-bold">รับแล้ว</span> หรือ <span class="fw-bold">จ่ายงานแล้ว</span> — แนะนำให้ติ๊ก “รีเซ็ตสถานะรับแล้ว” เพื่อคำนวณใหม่</div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="card border-0 bg-light" style="border-radius: 12px;">
+                                <div class="card-body">
+                                    <div class="fw-bold text-muted mb-2">ข้อมูลปัจจุบัน (อ่านอย่างเดียว)</div>
+                                    <div class="small text-muted">Order ID</div>
+                                    <div class="fw-bold" id="editSkuOrderId">-</div>
+                                    <div class="mt-2 small text-muted">SKU เดิม</div>
+                                    <div class="fw-bold text-danger" id="editSkuOldSku">-</div>
+                                    <div class="mt-2 small text-muted">Brand / Model</div>
+                                    <div class="fw-bold" id="editSkuBrandModel">-</div>
+                                    <div class="mt-2 small text-muted">Qty</div>
+                                    <div class="fw-bold" id="editSkuQty">-</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="mb-2 fw-bold text-muted">เลือก SKU ใหม่</div>
+                            <div class="position-relative">
+                                <input type="text" class="form-control" name="new_sku" id="editSkuNewSku" placeholder="พิมพ์ SKU / Brand / Model..." autocomplete="off" required style="border-radius: 10px;">
+                                <div id="skuSuggest" class="sku-suggest"></div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 mt-2">
+                                <span class="badge bg-light text-dark border">Stock ปัจจุบัน</span>
+                                <span class="badge bg-primary" id="editSkuStock">-</span>
+                            </div>
+
+                            <div class="mt-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="1" id="editSkuMerge" name="merge_if_exists" checked>
+                                    <label class="form-check-label" for="editSkuMerge">ถ้า SKU ซ้ำในออเดอร์เดียวกัน → รวมจำนวนอัตโนมัติ</label>
+                                </div>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" value="1" id="editSkuReset" name="reset_accept" checked>
+                                    <label class="form-check-label" for="editSkuReset">หลังแก้ SKU ให้ “ยกเลิกสถานะรับแล้ว” เพื่อคำนวณใหม่</label>
+                                </div>
+                            </div>
+
+                            <div class="mt-3">
+                                <label class="form-label fw-bold text-danger">เหตุผลในการแก้ *</label>
+                                <textarea class="form-control bg-light" name="reason" id="editSkuReason" rows="3" required placeholder="เช่น เปลี่ยนรุ่น / SKU เดิมเลิกผลิต" style="border-radius: 10px;"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info border-0 mt-3" style="border-radius: 12px; background:#e7f1ff; color:#0d47a1;">
+                        <i class="bi bi-info-circle me-1"></i>
+                        การแก้ SKU จะส่งผลต่อ <span class="fw-bold">กอง / Stock / รายงานจัดซื้อ</span> ทันที
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light border-0" style="border-radius: 0 0 15px 15px;">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">ปิด</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">บันทึกการแก้ไข</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="loadingOverlay" class="d-none position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style="background: rgba(255,255,255,0.7); z-index: 9999; backdrop-filter: blur(4px);">
+    <div class="text-center shadow-lg p-4 rounded-4 bg-white">
+        <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
+        <h6 class="m-0 text-secondary fw-bold">กำลังโหลดข้อมูล...</h6>
+    </div>
+</div>
+
+<div class="scroll-nav-container" style="position:fixed;bottom:30px;right:30px;z-index:9999;display:flex;flex-direction:column;gap:10px;">
+  <button type="button" class="btn btn-secondary rounded-circle shadow border-0" id="btn-scroll-to-bottom" style="width:45px;height:45px;display:none; transition:transform 0.2s;"><i class="bi bi-arrow-down fs-5"></i></button>
+  <button type="button" class="btn btn-primary rounded-circle shadow border-0" id="btn-back-to-top" style="width:45px;height:45px;display:none; background: linear-gradient(135deg, #0d6efd, #0a58ca); transition:transform 0.2s;"><i class="bi bi-arrow-up fs-5"></i></button>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Init DataTable
+    if (typeof $ !== 'undefined' && $.fn.dataTable) {
+        var table = $('#ordersTable').DataTable({
+            "paging": true, "pageLength": 50, "lengthMenu": [[50, 100, 200, -1], [50, 100, 200, "ทั้งหมด"]],
+            "searching": false, "info": true, "ordering": true, "order": [[3, 'asc']], 
+            "columnDefs": [{ "orderable": false, "targets": 0 }],
+            "drawCallback": function (settings) {
+                var api = this.api(); var rows = api.rows({page:'current'}).nodes(); var last = null;
+                $(rows).removeClass('order-group-start order-group-end');
+                api.column(3, {page:'current'}).data().each(function (group, i) {
+                    var orderId = typeof group === 'string' ? group.replace(/<[^>]*>/g, '').trim() : group;
+                    if (last !== orderId) { $(rows).eq(i).addClass('order-group-start'); if (i > 0) $(rows).eq(i-1).addClass('order-group-end'); last = orderId; }
+                });
+                if (rows.length > 0) $(rows).last().addClass('order-group-end');
+            }
+        });
+    }
+
+    // =========================
+    // Loading & Filters (FIX + AUTO SCROLL)
+    // =========================
+    function showLoading() {
+        const el = document.getElementById('loadingOverlay');
+        if (el) el.classList.remove('d-none');
+    }
+
+    // =========================
+    // Edit SKU Modal + Autocomplete
+    // =========================
+    const editSkuModalEl = document.getElementById('editSkuModal');
+    const editSkuForm = document.getElementById('editSkuForm');
+    const suggestBox = document.getElementById('skuSuggest');
+    const inputNewSku = document.getElementById('editSkuNewSku');
+    const inputOrderlineId = document.getElementById('editSkuOrderlineId');
+    const inputNextUrl = document.getElementById('editSkuNextUrl');
+
+    const elOrderId = document.getElementById('editSkuOrderId');
+    const elOldSku = document.getElementById('editSkuOldSku');
+    const elBrandModel = document.getElementById('editSkuBrandModel');
+    const elQty = document.getElementById('editSkuQty');
+    const elStock = document.getElementById('editSkuStock');
+    const warnBox = document.getElementById('editSkuWarnBox');
+    const reasonBox = document.getElementById('editSkuReason');
+
+    function debounce(fn, delay) {
+        let t;
+        return function(...args) {
+            clearTimeout(t);
+            t = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+
+    function hideSuggest() {
+        if (suggestBox) {
+            suggestBox.classList.remove('show');
+            suggestBox.innerHTML = '';
+        }
+    }
+
+    function showSuggest(items) {
+        if (!suggestBox) return;
+        if (!items || items.length === 0) { hideSuggest(); return; }
+
+        suggestBox.innerHTML = items.map(it => {
+            const sku = (it.sku || '').toString();
+            const brand = (it.brand || '').toString();
+            const model = (it.model || '').toString();
+            const stock = (it.stock_qty ?? 0);
+            const meta = [brand, model].filter(Boolean).join(' • ');
+            return `
+                <div class="item" data-sku="${sku.replace(/"/g,'&quot;')}" data-stock="${stock}" data-meta="${meta.replace(/"/g,'&quot;')}">
+                    <div>
+                        <div class="sku">${sku}</div>
+                        <div class="meta">${meta || '-'}</div>
+                    </div>
+                    <div class="stock">Stock ${stock}</div>
+                </div>
+            `;
+        }).join('');
+        suggestBox.classList.add('show');
+    }
+
+    async function fetchSkuSuggest(q) {
+        const res = await fetch(`/api/products/search?q=${encodeURIComponent(q)}`, { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) return [];
+        return await res.json();
+    }
+
+    async function updateStockBadgeFromInput() {
+        if (!inputNewSku || !elStock) return;
+        const val = (inputNewSku.value || '').trim();
+        if (val.length < 2) { elStock.innerText = '-'; return; }
+        try {
+            const items = await fetchSkuSuggest(val);
+            const exact = (items || []).find(it => (it.sku || '').toLowerCase() === val.toLowerCase());
+            if (exact) elStock.innerText = (exact.stock_qty ?? 0);
+            else elStock.innerText = '-';
+        } catch (e) {
+            elStock.innerText = '-';
+        }
+    }
+
+    const onSkuTyping = debounce(async function() {
+        if (!inputNewSku) return;
+        const q = (inputNewSku.value || '').trim();
+        if (q.length < 2) { hideSuggest(); return; }
+        try {
+            const items = await fetchSkuSuggest(q);
+            showSuggest(items);
+        } catch (e) {
+            hideSuggest();
+        }
+    }, 250);
+
+    if (inputNewSku) {
+        inputNewSku.addEventListener('input', onSkuTyping);
+        inputNewSku.addEventListener('blur', () => setTimeout(hideSuggest, 150));
+        inputNewSku.addEventListener('change', updateStockBadgeFromInput);
+    }
+
+    if (suggestBox) {
+        suggestBox.addEventListener('mousedown', function(e) {
+            const item = e.target.closest('.item');
+            if (!item || !inputNewSku) return;
+            const sku = item.getAttribute('data-sku') || '';
+            const stock = item.getAttribute('data-stock') || '0';
+            inputNewSku.value = sku;
+            if (elStock) elStock.innerText = stock;
+            hideSuggest();
+        });
+    }
+
+    function openEditSkuModal(btn) {
+        if (!editSkuModalEl) return;
+        const modal = new bootstrap.Modal(editSkuModalEl);
+
+        const orderlineId = btn.getAttribute('data-orderline-id') || '';
+        const orderId = btn.getAttribute('data-order-id') || '';
+        const oldSku = btn.getAttribute('data-old-sku') || '';
+        const brand = btn.getAttribute('data-brand') || '';
+        const model = btn.getAttribute('data-model') || '';
+        const qty = btn.getAttribute('data-qty') || '';
+        const accepted = btn.getAttribute('data-accepted') === '1';
+        const issued = btn.getAttribute('data-issued') === '1';
+
+        if (inputOrderlineId) inputOrderlineId.value = orderlineId;
+        if (inputNextUrl) inputNextUrl.value = window.location.href;
+        if (elOrderId) elOrderId.innerText = orderId || '-';
+        if (elOldSku) elOldSku.innerText = oldSku || '-';
+        if (elBrandModel) elBrandModel.innerText = [brand, model].filter(Boolean).join(' • ') || '-';
+        if (elQty) elQty.innerText = qty || '-';
+        if (inputNewSku) inputNewSku.value = '';
+        if (elStock) elStock.innerText = '-';
+        if (reasonBox) reasonBox.value = '';
+
+        if (warnBox) {
+            if (accepted || issued) warnBox.classList.remove('d-none');
+            else warnBox.classList.add('d-none');
+        }
+
+        modal.show();
+    }
+
+    document.querySelectorAll('.js-edit-sku').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openEditSkuModal(this);
+        });
+    });
+
+    if (editSkuForm) {
+        editSkuForm.addEventListener('submit', function() {
+            showLoading();
+        });
+    }
+
+    const filterForm = document.getElementById('filterForm');
+
+    // ✅ ทุกครั้งที่ "submit ฟอร์มกรอง" (กดค้นหา/กด Enter/กด KPI แล้ว requestSubmit)
+    // ให้โชว์ loading + ตั้งธงเพื่อเลื่อนลงตารางหลัง reload
+    if (filterForm) {
+        filterForm.addEventListener('submit', function() {
+            sessionStorage.setItem('scrollToOrders', '1');   // ⭐ เพิ่มเพื่อให้ปุ่มค้นหาก็เลื่อนลงด้วย
+            showLoading();
+        });
+    }
+
+    // ✅ กด KPI -> เซ็ตค่า status ลง input hidden แล้ว submit
+    document.querySelectorAll('.kpi-filter').forEach(card => {
+        card.addEventListener('click', function() {
+            if (!filterForm) return;
+
+            const statusVal = this.getAttribute('data-status') || '';
+
+            // สำคัญ: ของจริงเป็น input hidden ไม่ใช่ select
+            let statusInput = filterForm.querySelector('input[name="status"]');
+            if (!statusInput) {
+                statusInput = document.createElement('input');
+                statusInput.type = 'hidden';
+                statusInput.name = 'status';
+                filterForm.appendChild(statusInput);
+            }
+            statusInput.value = statusVal;
+
+            // ตั้งธงไว้ด้วย (กันกรณี fallback submit ที่ไม่ยิง event submit)
+            sessionStorage.setItem('scrollToOrders', '1');
+
+            // ใช้ requestSubmit เพื่อให้ submit event ทำงาน (จะได้โชว์ loading แน่นอน)
+            if (filterForm.requestSubmit) filterForm.requestSubmit();
+            else { showLoading(); filterForm.submit(); }
+        });
+    });
+
+    // ✅ หลังหน้า reload: ถ้ามีธง ให้เลื่อนลงตารางอัตโนมัติ
+    if (sessionStorage.getItem('scrollToOrders') === '1') {
+        sessionStorage.removeItem('scrollToOrders');
+
+        setTimeout(() => {
+            const target = document.getElementById('ordersTableSection') || document.getElementById('ordersTable');
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // ถ้ามี header fixed แล้วบังหัวตาราง ปรับ offset ได้
+                window.scrollBy(0, -80);
+            }
+        }, 100);
+    }
+
+    // Bulk Actions
+    const checkAll = document.getElementById('check-all');
+    const bulkBar = document.getElementById('bulk-bar');
+    const countSpan = document.getElementById('selected-count');
+    
+    function updateBulk() {
+        const c = document.querySelectorAll('.js-row-check:checked').length;
+        if(countSpan) countSpan.innerText = c;
+        if(bulkBar) {
+            if(c>0) bulkBar.classList.remove('d-none'); else bulkBar.classList.add('d-none');
+        }
+    }
+    
+    if(checkAll) checkAll.addEventListener('change', function(){
+        document.querySelectorAll('.js-row-check').forEach(chk => chk.checked = this.checked);
+        updateBulk();
+    });
+    
+    document.querySelector('tbody').addEventListener('change', function(e){
+        if(e.target.classList.contains('js-row-check')) {
+            updateBulk();
+            if(!e.target.checked && checkAll) checkAll.checked = false;
+        }
+    });
+    
+    document.getElementById('btn-bulk-clear').addEventListener('click', function(){
+        document.querySelectorAll('.js-row-check').forEach(chk => chk.checked = false);
+        if(checkAll) checkAll.checked = false;
+        updateBulk();
+    });
+
+    // Bulk Accept Logic
+    const btnAccept = document.getElementById('btn-bulk-accept-confirm');
+    if(btnAccept) {
+        const newBtn = btnAccept.cloneNode(true);
+        btnAccept.parentNode.replaceChild(newBtn, btnAccept);
+        newBtn.addEventListener('click', function(){
+            const checked = document.querySelectorAll('.js-row-check:checked');
+            let validIds = [];
+            checked.forEach(chk => { if(chk.getAttribute('data-order-ready') === 'true') validIds.push(chk.value); });
+            
+            if(validIds.length === 0) { alert('❌ ไม่มีรายการที่พร้อมรับ (ต้องเขียวทั้งใบ)'); return; }
+            if(confirm(`ยืนยันรับ ${validIds.length} รายการที่พร้อม?`)) {
+                const f = document.createElement('form'); f.method='POST'; f.action="{{ url_for('bulk_accept') }}";
+                validIds.forEach(v => { const i=document.createElement('input'); i.type='hidden'; i.name='order_line_ids[]'; i.value=v; f.appendChild(i); });
+                document.body.appendChild(f); showLoading(); f.submit();
+            }
+        });
+    }
+    
+    // Bulk Cancel Logic
+    const btnCancel = document.getElementById('btn-bulk-cancel');
+    if(btnCancel) {
+        const newBtn = btnCancel.cloneNode(true);
+        btnCancel.parentNode.replaceChild(newBtn, btnCancel);
+        newBtn.addEventListener('click', function(){
+            const checked = document.querySelectorAll('.js-row-check:checked');
+            if(checked.length===0) return;
+            if(confirm(`ยืนยันยกเลิกรับ ${checked.length} รายการ?`)) {
+                const f = document.createElement('form'); f.method='POST'; f.action="{{ url_for('bulk_cancel') }}";
+                checked.forEach(c => { const i=document.createElement('input'); i.type='hidden'; i.name='order_line_ids[]'; i.value=c.value; f.appendChild(i); });
+                document.body.appendChild(f); showLoading(); f.submit();
+            }
+        });
+    }
+
+    // Scroll Buttons
+    const btnUp = document.getElementById("btn-back-to-top");
+    const btnDown = document.getElementById("btn-scroll-to-bottom");
+    
+    window.addEventListener("scroll", function() {
+        const y = window.scrollY;
+        if (y > 300) btnUp.style.display = "block"; else btnUp.style.display = "none";
+        if (y + window.innerHeight < document.body.scrollHeight - 300) btnDown.style.display = "block"; else btnDown.style.display = "none";
+    });
+    
+    btnUp.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+    btnDown.addEventListener("click", () => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }));
+});
+
+// Global functions
+function openCancelModal(oid) {
+    document.getElementById('modalOrderIdDisplay').innerText = oid;
+    document.getElementById('inputOrderIdForCancel').value = oid;
+    new bootstrap.Modal(document.getElementById('cancelOrderModal')).show();
+}
+
+function confirmBulkDeleteOrders() {
+    const checked = document.querySelectorAll('.js-row-check:checked');
+    if (checked.length === 0) { alert('กรุณาเลือกรายการ'); return; }
+    if (confirm(`⚠️ ยืนยันลบ ${checked.length} รายการ? (กู้คืนได้)`)) {
+        const f = document.getElementById('bulk-delete-form'); f.innerHTML='';
+        checked.forEach(c => { const i=document.createElement('input'); i.type='hidden'; i.name='order_line_ids[]'; i.value=c.value; f.appendChild(i); });
+        f.submit();
+    }
+}
+</script>
+
+{% endblock %}

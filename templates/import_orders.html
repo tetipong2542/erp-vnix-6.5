@@ -1,0 +1,478 @@
+
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+  <div>
+    <h3 class="mb-1 fw-bold text-dark"><i class="bi bi-cloud-arrow-up-fill me-2 text-primary"></i>นำเข้า Orders</h3>
+    <div class="text-muted small border-start border-3 border-primary ps-3">
+      จัดการนำเข้าข้อมูลและตรวจสอบสถานะประจำวัน
+    </div>
+  </div>
+  
+  <form method="get" class="bg-white p-2 rounded shadow-sm border d-flex align-items-center gap-2 flex-wrap">
+    <div class="text-secondary small fw-bold text-nowrap">
+      <i class="bi bi-calendar-range me-1"></i> ช่วงวันที่:
+    </div>
+    <div class="d-flex align-items-center gap-1">
+      <input type="date" name="date_from" id="filter_date_from" class="form-control form-control-sm" style="width: 130px;" 
+             value="{{ date_from if date_from else '' }}" onchange="this.form.submit()">
+      <span class="text-muted small">ถึง</span>
+      <input type="date" name="date_to" id="filter_date_to" class="form-control form-control-sm" style="width: 130px;" 
+             value="{{ date_to if date_to else '' }}" onchange="this.form.submit()">
+    </div>
+    
+    <a href="{{ url_for('import_orders_view') }}" class="btn btn-light btn-sm border text-primary fw-bold d-flex align-items-center" title="ล้างค่าเป็นวันนี้">
+      <i class="bi bi-arrow-clockwise me-1"></i> รีเฟรช/วันนี้
+    </a>
+    
+    <button type="button" class="btn btn-outline-danger btn-sm" onclick="openClearModal()" title="ล้างประวัติ Log">
+        <i class="bi bi-trash-fill"></i> ล้างประวัติ
+    </button>
+    
+    <div class="badge bg-light text-primary border px-2 py-1 small" style="font-size: 0.75rem;">
+      {{ view_date_range_thai if view_date_range_thai else '' }}
+    </div>
+  </form>
+</div>
+
+<!-- Dashboard Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #f6f8fd 0%, #f1f4f9 100%);">
+      <div class="card-body">
+        <div class="text-muted small fw-bold text-uppercase mb-2">
+          <i class="bi bi-layers-fill me-1"></i> รวมทั้งหมด (Order)
+        </div>
+        <div class="d-flex align-items-center justify-content-between">
+          <h2 class="mb-0 fw-bold text-primary">{{ dash.total if dash else 0 }}</h2>
+          <i class="bi bi-box-seam text-primary opacity-25 fs-1"></i>
+        </div>
+        <small class="text-muted" style="font-size: 0.75rem;">Orders ที่ไม่ซ้ำ</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);">
+      <div class="card-body">
+        <div class="text-success small fw-bold text-uppercase mb-2">
+          <i class="bi bi-check-circle-fill me-1"></i> สำเร็จ (Success)
+        </div>
+        <div class="d-flex align-items-center justify-content-between">
+          <h2 class="mb-0 fw-bold text-success">{{ dash.success if dash else 0 }}</h2>
+          <i class="bi bi-check2-all text-success opacity-25 fs-1"></i>
+        </div>
+        <small class="text-success opacity-75" style="font-size: 0.75rem;">Orders ที่มีในระบบ</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);">
+      <div class="card-body">
+        <div class="small fw-bold text-uppercase mb-2" style="color:#e65100;">
+          <i class="bi bi-files me-1"></i> ซ้ำข้ามวัน (Duplicate)
+        </div>
+        <div class="d-flex align-items-center justify-content-between">
+          <h2 class="mb-0 fw-bold" style="color:#e65100;">{{ dash.duplicate if dash else 0 }}</h2>
+          <i class="bi bi-copy text-warning opacity-25 fs-1"></i>
+        </div>
+        <small style="font-size: 0.75rem; color:#bf360c;">
+          Order เดิมจากวันก่อน
+          {% if dash and dash.duplicate_today and dash.duplicate_today > 0 %}
+          <br><span class="text-muted">(ซ้ำวันนี้ {{ dash.duplicate_today }} ไม่นับ)</span>
+          {% endif %}
+        </small>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);">
+      <div class="card-body">
+        <div class="text-danger small fw-bold text-uppercase mb-2">
+          <i class="bi bi-x-circle-fill me-1"></i> ไม่สำเร็จ (Failed)
+        </div>
+        <div class="d-flex align-items-center justify-content-between">
+          <h2 class="mb-0 fw-bold text-danger">{{ dash.failed if dash else 0 }}</h2>
+          <i class="bi bi-exclamation-triangle text-danger opacity-25 fs-1"></i>
+        </div>
+        <small class="text-danger opacity-75" style="font-size: 0.75rem;">ข้อมูลไม่ครบ/ผิดพลาด</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Error Details - Grouped by Import -->
+{% if dash and dash.grouped_errors %}
+<div class="alert alert-danger border-0 shadow-sm mb-4">
+  <div class="d-flex align-items-center mb-3 border-bottom pb-2">
+    <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+    <span class="fw-bold">พบรายการที่ไม่สำเร็จ (แบ่งตามไฟล์นำเข้า):</span>
+  </div>
+  
+  <div class="bg-white rounded p-0 text-danger small" style="max-height: 350px; overflow-y: auto;">
+    {% for group in dash.grouped_errors %}
+    <div class="p-2 {% if not loop.last %}border-bottom{% endif %}">
+        <div class="d-flex justify-content-between align-items-center mb-2 bg-light p-2 rounded">
+            <div>
+                <span class="badge bg-secondary me-1">{{ group.platform }}</span>
+                <span class="fw-bold text-dark">{{ group.shop_name }}</span>
+                <span class="text-muted ms-1" style="font-size: 0.75em;">({{ group.filename }})</span>
+            </div>
+            <span class="text-muted" style="font-size: 0.8em;">
+                <i class="bi bi-clock"></i> {{ group.time }}
+            </span>
+        </div>
+        <ul class="mb-0 ps-4 text-secondary">
+          {% for err in group.errors %}
+            <li>{{ err }}</li>
+          {% endfor %}
+        </ul>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Import Forms -->
+<div class="row g-4">
+  <!-- Excel Import -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white py-3 border-bottom-0">
+        <h5 class="mb-0 fw-bold text-primary">
+          <i class="bi bi-file-earmark-excel me-2"></i> นำเข้าจาก Excel
+        </h5>
+      </div>
+      <div class="card-body pt-0">
+        <form method="post" enctype="multipart/form-data" class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label small fw-bold">
+              แพลตฟอร์ม <span class="text-danger">*</span>
+            </label>
+            <select name="platform" class="form-select" required>
+              <option value="">-- เลือกแพลตฟอร์ม --</option>
+              <option value="Shopee">Shopee</option>
+              <option value="TikTok">TikTok</option>
+              <option value="Lazada">Lazada</option>
+              <option value="อื่นๆ">อื่นๆ</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-bold">ชื่อร้าน</label>
+            <input name="shop_name" class="form-control" list="shops" 
+                   placeholder="เลือกหรือพิมพ์เอง (ถ้าในไฟล์มีคอลัมน์ชื่อร้านจะใช้จากไฟล์)">
+            <datalist id="shops">
+              {% for s in shops %}
+                <option value="{{ s.name }}">{{ s.name }} ({{ s.platform }})</option>
+              {% endfor %}
+            </datalist>
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-bold">
+              ไฟล์ Excel (.xlsx) <span class="text-danger">*</span>
+            </label>
+            <input type="file" name="file" class="form-control" required accept=".xlsx, .xls">
+          </div>
+          <div class="col-12 mt-4 d-flex flex-wrap align-items-center gap-2">
+            <button class="btn btn-primary px-4 py-2 fw-bold shadow-sm">
+              <i class="bi bi-upload me-2"></i>นำเข้าข้อมูล
+            </button>
+            {% if has_endpoint('download_orders_template') %}
+            <a href="{{ url_for('download_orders_template') }}" class="btn btn-outline-secondary px-3 py-2 d-flex align-items-center shadow-sm" title="โหลดไฟล์ตัวอย่าง">
+               <i class="bi bi-download me-1"></i> Template
+            </a>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Google Sheet Import -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white py-3 border-bottom-0">
+        <h5 class="mb-0 fw-bold text-success">
+          <i class="bi bi-google me-2"></i> นำเข้าจาก Google Sheet
+        </h5>
+      </div>
+      <div class="card-body pt-0 bg-light bg-opacity-10">
+        <form action="{{ url_for('import_orders_gsheet') }}" method="post" class="row g-3">
+          <div class="col-12">
+            <div class="alert alert-light border small text-muted mb-2 py-2">
+              <i class="bi bi-info-circle me-1"></i> 
+              <b>Tab อัตโนมัติ:</b> 
+              Shopee → <code>Import_Shopee</code> | 
+              Lazada → <code>Import_Lazada</code> | 
+              TikTok → <code>Import_Tiktok</code> | 
+              อื่นๆ → <code>Import_Order_other</code>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-bold">
+              แพลตฟอร์ม <span class="text-danger">*</span>
+            </label>
+            <select name="platform" id="gs_platform" class="form-select" required onchange="loadUrlByPlatform()">
+              <option value="">-- เลือกแพลตฟอร์ม --</option>
+              <option value="Shopee">Shopee</option>
+              <option value="Lazada">Lazada</option>
+              <option value="TikTok">TikTok</option>
+              <option value="อื่นๆ">อื่นๆ</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-bold">ชื่อร้าน</label>
+            <input name="shop_name" id="gs_shop_name" class="form-control" list="shops_gs" 
+                   placeholder="ระบุชื่อร้าน..." onchange="loadShopUrl()" onblur="loadShopUrl()">
+            <datalist id="shops_gs">
+              {% for s in shops %}
+                <option value="{{ s.name }}">{{ s.name }} ({{ s.platform }})</option>
+              {% endfor %}
+            </datalist>
+          </div>
+          
+          <div class="col-12">
+            <label class="form-label small fw-bold d-flex justify-content-between align-items-center">
+              <span>Google Sheet URL <span class="text-danger">*</span></span>
+              <div>
+                 <a href="#" onclick="saveUrl(); return false;" class="text-primary small text-decoration-none me-2">
+                   <i class="bi bi-save"></i> บันทึก
+                 </a>
+                 <a href="#" onclick="deleteUrl(); return false;" class="text-danger small text-decoration-none">
+                   <i class="bi bi-trash"></i> ลบ
+                 </a>
+              </div>
+            </label>
+            <div class="input-group">
+              <span class="input-group-text bg-white"><i class="bi bi-link-45deg"></i></span>
+              
+              <input type="text" name="sheet_url" id="gs_url" 
+                     class="form-control font-monospace text-truncate" 
+                     required 
+                     placeholder="วางลิงก์ หรือ ดับเบิ้ลคลิกเพื่อเลือกประวัติ..."
+                     list="url_history"
+                     autocomplete="on">
+                     
+              <datalist id="url_history">
+                {% for name, url in shop_urls.items() %}
+                    <option value="{{ url }}">{{ name }}</option>
+                {% endfor %}
+              </datalist>
+            </div>
+            <div class="form-text small text-muted">
+                * พิมพ์ชื่อ Platform (เช่น Shopee) หรือดับเบิ้ลคลิกในช่องเพื่อเลือก Link เก่า
+            </div>
+          </div>
+          
+          <div class="col-12 mt-4">
+            <button type="submit" class="btn btn-success px-4 py-2 fw-bold shadow-sm" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border: none;">
+              <i class="bi bi-cloud-download me-2"></i> ดึงข้อมูลออนไลน์
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// รับข้อมูล URL ของร้านทั้งหมดมาจาก Backend
+const shopUrls = {{ shop_urls | tojson | default('{}') }};
+
+// เมื่อโหลดหน้าเว็บ ถ้ามีการเลือกแพลตฟอร์มค้างไว้ (เช่น browser จำค่า) ให้โหลด URL ทันที
+document.addEventListener("DOMContentLoaded", function() {
+    loadUrlByPlatform();
+});
+
+// 1. ฟังก์ชันโหลด URL เมื่อเลือก Platform
+function loadUrlByPlatform() {
+    const pf = document.getElementById('gs_platform').value;
+    const nameInput = document.getElementById('gs_shop_name');
+    const urlInput = document.getElementById('gs_url');
+    
+    // ถ้าชื่อร้านว่างอยู่ หรือร้านที่พิมพ์ไว้ไม่มี URL เฉพาะ -> ให้ใช้ URL ของ Platform
+    if (pf) {
+        const currentShop = nameInput.value.trim();
+        // ถ้าไม่มีชื่อร้าน หรือ ชื่อร้านนั้นไม่มี URL -> ใช้ของ Platform
+        if (!currentShop || !shopUrls[currentShop]) {
+            if (shopUrls[pf]) {
+                urlInput.value = shopUrls[pf];
+            } else {
+                urlInput.value = ''; // ถ้า Platform นั้นก็ไม่มี URL ให้เคลียร์
+            }
+        }
+    }
+}
+
+// 2. ฟังก์ชันโหลด URL เมื่อพิมพ์ชื่อร้าน
+function loadShopUrl() {
+    const name = document.getElementById('gs_shop_name').value.trim();
+    const pf = document.getElementById('gs_platform').value;
+    const urlInput = document.getElementById('gs_url');
+
+    // ลำดับการดึงข้อมูล:
+    // 1. ถ้ามีชื่อร้าน และร้านนั้นมี URL เฉพาะ -> ใช้ URL ร้าน
+    if(name && shopUrls[name]) {
+        urlInput.value = shopUrls[name];
+    } 
+    // 2. ถ้าไม่มีชื่อร้าน หรือร้านนั้นไม่มี URL -> ให้ใช้ URL ของ Platform (Fallback)
+    // นี่คือส่วนที่ทำให้ลิงก์ "ค้าง" อยู่แม้จะพิมพ์ชื่อร้านใหม่ที่ยังไม่เคยเซฟ
+    else if (pf && shopUrls[pf]) {
+        urlInput.value = shopUrls[pf];
+    }
+    // 3. ถ้าไม่มีอะไรเลย -> เคลียร์
+    else {
+        urlInput.value = '';
+    }
+}
+
+// 3. ฟังก์ชันบันทึก URL
+async function saveUrl() {
+    const name = document.getElementById('gs_shop_name').value.trim();
+    const url = document.getElementById('gs_url').value.trim();
+    const pf = document.getElementById('gs_platform').value;
+    
+    if(!pf) {
+        alert('กรุณาเลือกแพลตฟอร์ม');
+        return;
+    }
+    if(!url) {
+        alert('กรุณาระบุ URL Google Sheet');
+        return;
+    }
+    
+    // ถ้าไม่ระบุชื่อร้าน เราจะบันทึกใส่ชื่อ Platform แทน (เช่นชื่อ "Shopee") 
+    // เพื่อให้เป็น URL กลางของแพลตฟอร์มนั้น
+    const targetName = name ? name : pf;
+
+    try {
+        let res = await fetch('/api/shop/url', {
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({shop_name: targetName, platform: pf, url: url, action: 'save'})
+        });
+        let data = await res.json();
+        if(data.success) {
+            alert(`บันทึกลิงก์สำหรับ '${targetName}' เรียบร้อยแล้ว`);
+            // อัปเดตตัวแปรใน JS ทันที (เพื่อให้ไม่ต้องรีเฟรชหน้า)
+            shopUrls[targetName] = url;
+        } else {
+            alert(data.msg || 'เกิดข้อผิดพลาด');
+        }
+    } catch(e) { 
+        alert('เกิดข้อผิดพลาดในการบันทึก'); 
+        console.error(e);
+    }
+}
+
+async function deleteUrl() {
+    const name = document.getElementById('gs_shop_name').value.trim();
+    const pf = document.getElementById('gs_platform').value;
+    
+    // ถ้าชื่อร้านว่าง ให้ถือว่ากำลังจะลบ URL ของ Platform นั้น
+    const targetName = name ? name : pf;
+
+    if(!targetName) {
+        alert('กรุณาเลือกแพลตฟอร์มหรือระบุชื่อร้านที่จะลบ');
+        return;
+    }
+    
+    if(!confirm('ต้องการลบลิงก์ที่บันทึกไว้ของ: ' + targetName + ' ?')) return;
+    
+    try {
+        let res = await fetch('/api/shop/url', {
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({shop_name: targetName, platform: pf, action: 'delete'})
+        });
+        let data = await res.json();
+        if(data.success) {
+            document.getElementById('gs_url').value = '';
+            alert('ลบลิงก์เรียบร้อย');
+            delete shopUrls[targetName];
+            
+            // พยายามโหลดของ Platform คืนมา (กรณีลบของร้านทิ้งแล้วอยากให้กลับไปใช้ของกลาง)
+            if (name && shopUrls[pf]) {
+                document.getElementById('gs_url').value = shopUrls[pf];
+            }
+        } else {
+            alert(data.msg || 'เกิดข้อผิดพลาด');
+        }
+    } catch(e) { 
+        alert('เกิดข้อผิดพลาดในการลบ'); 
+    }
+}
+
+// ============ ฟังก์ชันล้างประวัติ (Clear Log) ============
+function openClearModal() {
+    // ดึงค่าวันที่จาก Filter ด้านบน
+    const dFrom = document.getElementById('filter_date_from').value;
+    const dTo = document.getElementById('filter_date_to').value;
+    
+    // ใส่ค่าลงใน Modal
+    document.getElementById('modalInputFrom').value = dFrom;
+    document.getElementById('modalInputTo').value = dTo;
+    document.getElementById('modalDateRange').innerText = dFrom + ' ถึง ' + dTo;
+    
+    // เปิด Modal
+    new bootstrap.Modal(document.getElementById('clearLogModal')).show();
+}
+</script>
+
+<!-- Modal ล้างประวัติ -->
+<div class="modal fade" id="clearLogModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill me-2"></i>ล้างประวัติการนำเข้า</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form action="{{ url_for('clear_import_log') }}" method="POST">
+          <div class="modal-body">
+            <p class="mb-2">กรุณาเลือกรูปแบบการล้างข้อมูล:</p>
+            
+            <div class="card card-body bg-light border-0 p-2 mb-3">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="mode" id="modeRange" value="range" checked>
+                    <label class="form-check-label" for="modeRange">
+                        ล้าง Log ของวันที่เลือก (<span class="text-primary fw-bold" id="modalDateRange"></span>)
+                    </label>
+                </div>
+                
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="mode" id="modeAll" value="all">
+                    <label class="form-check-label text-danger fw-bold" for="modeAll">
+                        ล้างประวัติทั้งหมด (Reset All Time)
+                    </label>
+                </div>
+            </div>
+
+            <input type="hidden" name="date_from" id="modalInputFrom">
+            <input type="hidden" name="date_to" id="modalInputTo">
+            
+            <hr>
+
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="delete_data" value="yes" id="checkDeleteData">
+                <label class="form-check-label fw-bold text-danger" for="checkDeleteData">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i> ลบข้อมูลออเดอร์ (Success) ออกด้วย
+                </label>
+                <div class="form-text text-muted small" style="font-size: 0.8rem;">
+                    * หากติ๊กช่องนี้ ข้อมูลออเดอร์จริง (การ์ดสีเขียว) จะถูกลบหายไปจากระบบด้วย
+                </div>
+            </div>
+            
+            <div class="alert alert-warning small mb-0 mt-3">
+                <i class="bi bi-info-circle"></i> หากไม่ติ๊ก Checkbox จะลบเพียง Log สถิติ (Duplicate/Failed) เท่านั้น
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+            <button type="submit" class="btn btn-danger">ยืนยันการลบ</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

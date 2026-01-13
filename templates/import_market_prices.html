@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid">
+
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <h4 class="mb-0">นำเข้า: ราคาตลาด (Market)</h4>
+      <div class="text-muted small">Competitors + Price Logs</div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('download_price_market_template') }}">
+        <i class="bi bi-download me-1"></i>ดาวน์โหลด Template
+      </a>
+      <a class="btn btn-outline-primary" href="{{ url_for('price_dashboard') }}">
+        <i class="bi bi-arrow-left"></i> กลับ Dashboard
+      </a>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+
+      <ul class="nav nav-pills mb-3" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-file" type="button" role="tab">
+            <i class="bi bi-file-earmark-arrow-up me-1"></i>นำเข้าไฟล์
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-gsheet" type="button" role="tab">
+            <i class="bi bi-google me-1"></i>Google Sheet
+          </button>
+        </li>
+      </ul>
+
+      <div class="tab-content">
+        <!-- ================== FILE ================== -->
+        <div class="tab-pane fade show active" id="tab-file" role="tabpanel">
+          <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="mode" value="file">
+
+            <div class="row g-3 align-items-start">
+              <div class="col-12 col-md-3">
+                <label class="form-label">Default platform (ถ้าไฟล์ไม่มีคอลัมน์ platform)</label>
+                <select class="form-select" name="default_platform">
+                  <option value="">(ใช้ค่าในไฟล์)</option>
+                  <option value="shopee">Shopee</option>
+                  <option value="lazada">Lazada</option>
+                  <option value="tiktok">TikTok</option>
+                </select>
+                <div class="form-text" style="min-height:20px;">ถ้าในไฟล์มี platform อยู่แล้ว ไม่ต้องเลือก</div>
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label">เลือกไฟล์ Excel/CSV</label>
+                <input class="form-control" type="file" name="file" accept=".xlsx,.xls,.csv" required>
+                <div class="form-text" style="min-height:20px;">
+                  คอลัมน์ขั้นต่ำ (แบบ Dashboard): <b>SKU, Platform, Shop, Market (best)</b>
+                  (หรือแบบเดิม: <b>sku, platform, shop_name, net_price</b>)
+                </div>
+              </div>
+
+              <div class="col-12 col-md-3 d-grid">
+                <label class="form-label invisible">นำเข้า</label>
+                <button class="btn btn-primary">
+                  <i class="bi bi-cloud-upload me-1"></i>นำเข้าไฟล์
+                </button>
+                <div class="form-text" style="min-height:20px;">ระบบจะคำนวณ net ถ้าไม่ได้กรอก</div>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- ================== GSHEET ================== -->
+        <div class="tab-pane fade" id="tab-gsheet" role="tabpanel">
+          <form method="post">
+            <input type="hidden" name="mode" value="gsheet">
+
+            <div class="row g-3 align-items-start">
+              <div class="col-12 col-md-3">
+                <label class="form-label">Default platform</label>
+                <select class="form-select" name="default_platform">
+                  <option value="">(ใช้ค่าในชีท)</option>
+                  <option value="shopee">Shopee</option>
+                  <option value="lazada">Lazada</option>
+                  <option value="tiktok">TikTok</option>
+                </select>
+                <div class="form-text" style="min-height:20px;">ใช้เมื่อชีทไม่มีคอลัมน์ platform</div>
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label">Google Sheet URL</label>
+                <div class="d-flex gap-2">
+                  <input class="form-control"
+                         id="sheet_url_market"
+                         name="sheet_url"
+                         value="{{ saved_url or '' }}"
+                         placeholder="https://docs.google.com/spreadsheets/d/..."
+                         required>
+
+                  <button type="button" class="btn btn-outline-success"
+                          onclick="saveGsheetUrlMarket()">
+                    บันทึก
+                  </button>
+
+                  <button type="button" class="btn btn-outline-danger"
+                          onclick="deleteGsheetUrlMarket()">
+                    ลบ
+                  </button>
+                </div>
+                <div class="form-text" style="min-height:20px;">
+                  แนะนำให้แถวแรกเป็น header: sku, platform, shop_name, listed_price (หรือ net_price)
+                </div>
+              </div>
+
+              <div class="col-12 col-md-3">
+                <label class="form-label">Worksheet (ถ้าไม่ใส่ จะใช้แท็บแรก)</label>
+                <input class="form-control" id="worksheet_market" name="worksheet" value="{{ saved_worksheet or '' }}" placeholder="เช่น Market">
+                <div class="form-text" style="min-height:20px;">ใส่ชื่อแท็บใน Google Sheet</div>
+              </div>
+
+              <div class="col-12 col-md-3 d-grid">
+                <label class="form-label invisible">Submit</label>
+                <button class="btn btn-primary">
+                  <i class="bi bi-cloud-download me-1"></i>ดึงจาก Google Sheet
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="card border-danger mt-3">
+    <div class="card-header bg-danger text-white">Danger Zone</div>
+    <div class="card-body">
+
+      <h6 class="mb-2">1) Undo Import รอบล่าสุด</h6>
+      <div class="small text-secondary mb-2">
+        ผลกระทบ: ย้อนกลับเฉพาะ “รอบนำเข้าล่าสุด” ของ Market (จะลบ log ที่นำเข้า และย้อน snapshot ของคู่แข่ง)
+        <br>คำเตือน: ถ้ามีการแก้มือหลัง Import รอบนั้น อาจถูกย้อนกลับด้วย
+        {% if last_batch %}
+          <hr class="my-2">
+          <div>รอบล่าสุด: #{{ last_batch.id }} | ok {{ last_batch.ok_rows }} / skip {{ last_batch.skip_rows }}</div>
+          <div>เวลา: {{ last_batch.created_at }} | โดย: {{ last_batch.created_by }}</div>
+          {% if last_batch.source_name %}<div>แหล่ง: {{ last_batch.source }} — {{ last_batch.source_name }}</div>{% endif %}
+        {% endif %}
+      </div>
+
+      <form method="POST" action="{{ url_for('undo_price_market_last') }}"
+            onsubmit="return confirm('ยืนยัน Undo รอบล่าสุด?\nผลกระทบ: ข้อมูล Market ที่รอบล่าสุดแก้/เพิ่มจะย้อนกลับ');">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <button class="btn btn-outline-danger">Undo รอบล่าสุด</button>
+      </form>
+
+      <hr class="my-3">
+
+      <h6 class="mb-2">2) ล้างข้อมูล Market ทั้งหมด (ไม่เหลืออะไรเลย)</h6>
+      <div class="small text-danger mb-2">
+        ผลกระทบ: ข้อมูลคู่แข่ง (MarketItem) และประวัติราคา (Logs) จะถูกลบทั้งหมด
+        <br>การล้างนี้ “ลบจริง” (แนะนำสำรอง price.db ก่อน)
+      </div>
+
+      <form method="POST" action="{{ url_for('clear_price_market_all') }}"
+            onsubmit="return confirm('ยืนยันล้าง Market ทั้งหมด?\nผลกระทบ: Market snapshot + logs จะหายทั้งหมด');">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <label class="form-label">พิมพ์ <b>CLEAR MARKET</b> เพื่อยืนยัน</label>
+        <input class="form-control" name="confirm_text" placeholder="CLEAR MARKET" required>
+        <button class="btn btn-danger mt-2">ล้าง Market ทั้งหมด</button>
+      </form>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+async function saveGsheetUrlMarket(){
+  const url = (document.getElementById('sheet_url_market').value || '').trim();
+  const worksheet = (document.getElementById('worksheet_market')?.value || '').trim();
+  const res = await fetch('/api/price/config/gsheet_url', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({action:'save', platform:'PRICE_MARKET_SYSTEM', name:'GoogleSheet_Price_Market', url, worksheet})
+  });
+  const data = await res.json();
+  alert(data.msg || (data.success ? 'บันทึกแล้ว' : 'บันทึกไม่สำเร็จ'));
+}
+
+async function deleteGsheetUrlMarket(){
+  const res = await fetch('/api/price/config/gsheet_url', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({action:'delete', platform:'PRICE_MARKET_SYSTEM', name:'GoogleSheet_Price_Market'})
+  });
+  const data = await res.json();
+  if (data.success) {
+    document.getElementById('sheet_url_market').value = '';
+    const wsEl = document.getElementById('worksheet_market');
+    if (wsEl) wsEl.value = '';
+  }
+  alert(data.msg || (data.success ? 'ลบแล้ว' : 'ลบไม่สำเร็จ'));
+}
+</script>
+{% endblock %}

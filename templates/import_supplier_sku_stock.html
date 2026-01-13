@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h3 class="mb-0">Import Sku & Stock Supplier</h3>
+    <a class="btn btn-outline-primary" href="{{ url_for('download_supplier_sku_stock_template') }}">
+      <i class="bi bi-file-earmark-arrow-down"></i> Download Template
+    </a>
+  </div>
+
+  {% if last_batch %}
+  <div class="alert alert-info">
+    ล่าสุด: {{ last_batch.source }} | {{ last_batch.source_name }} | ok={{ last_batch.ok_rows }} skip={{ last_batch.skip_rows }}
+  </div>
+  {% endif %}
+
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">นำเข้า Excel/CSV</div>
+        <div class="card-body">
+          <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="mode" value="file">
+            <div class="mb-3">
+              <input class="form-control" type="file" name="file" accept=".xlsx,.xls,.csv">
+            </div>
+            <button class="btn btn-primary">
+              <i class="bi bi-upload"></i> Import
+            </button>
+          </form>
+          <div class="text-muted mt-2">
+            คอลัมน์: <b>SKU, SKU SUP, Supplier, Brand, Name, Stock</b>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">นำเข้า Google Sheet</div>
+        <div class="card-body">
+          <form method="post">
+            <input type="hidden" name="mode" value="gsheet">
+            <div class="mb-2">
+              <label class="form-label">Sheet URL</label>
+              <input class="form-control" type="text" name="sheet_url" value="{{ saved_url }}">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Worksheet</label>
+              <input class="form-control" type="text" name="worksheet" value="{{ saved_ws or 'Sheet1' }}">
+            </div>
+            <button class="btn btn-success">
+              <i class="bi bi-google"></i> Import from Sheet
+            </button>
+          </form>
+          <div class="text-muted mt-2">
+            กันซ้ำ: ถ้า <b>SKU SUP + Supplier</b> ซ้ำ ระบบใช้ <b>Stock = MAX</b> (ไม่นับซ้ำ)
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card border-danger">
+        <div class="card-header text-danger">ล้างข้อมูล Supplier Stock</div>
+        <div class="card-body">
+          <div class="row g-2 align-items-center">
+            <div class="col-lg-6">
+              <form method="post" action="{{ url_for('clear_supplier_stock_only') }}">
+                <div class="row g-2 align-items-center">
+                  <div class="col-md-6">
+                    <input class="form-control" name="confirm" placeholder='พิมพ์ "CLEAR SUP STOCK"'>
+                  </div>
+                  <div class="col-md-6">
+                    <button class="btn btn-warning w-100">
+                      <i class="bi bi-eraser"></i> ล้างเฉพาะ Stock (คง Mapping)
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <div class="col-lg-6">
+              <form method="post" action="{{ url_for('clear_supplier_all') }}">
+                <div class="row g-2 align-items-center">
+                  <div class="col-md-6">
+                    <input class="form-control" name="confirm" placeholder='พิมพ์ "CLEAR SUP ALL"'>
+                  </div>
+                  <div class="col-md-6">
+                    <button class="btn btn-danger w-100">
+                      <i class="bi bi-trash"></i> ล้างทั้งหมด
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="text-muted mt-2">
+            * ล้างเฉพาะ Stock = ตั้ง Stock Sup = 0 แต่ยังเก็บ SKU↔Supplier ไว้<br>
+            * ล้างทั้งหมด = ลบ Mapping + ประวัติ import ของ supplier
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

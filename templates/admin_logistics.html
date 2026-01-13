@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <div class="page-title-main">🚚 จัดการประเภทขนส่ง</div>
+    <div class="text-muted">ติ๊กหลายค่า → เลือก/พิมพ์ Master → ระบบจะแสดงชื่อเดียวกัน</div>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('admin_logistics_merge') }}"
+      onsubmit="return confirm('ยืนยันรวมประเภทขนส่งเป็น Master?');">
+
+  <div class="row g-2 align-items-end mb-3">
+    <div class="col-md-6">
+      <label class="form-label fw-bold">Master (พิมพ์หรือคัดจากรายการ)</label>
+      <input type="text" class="form-control" name="master" placeholder="เช่น SPX Express">
+      <div class="form-text">แนะนำให้ใช้ชื่อสั้น ๆ เพื่อให้ dropdown ไม่ยาว</div>
+
+
+      <div class="form-check mt-2">
+        <input class="form-check-input" type="checkbox" name="apply_existing" value="1" id="applyExisting" checked>
+        <label class="form-check-label" for="applyExisting">
+          อัปเดตข้อมูลเดิมในระบบให้เป็น Master ทันที (แนะนำ)
+        </label>
+      </div>
+    </div>
+    <div class="col-md-6 text-end">
+      <button class="btn btn-primary" id="btnApply" disabled>รวมเป็น Master</button>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-bordered table-striped align-middle">
+      <thead class="table-light">
+        <tr>
+          <th style="width:40px;"></th>
+          <th>ค่าที่พบในระบบ (Raw)</th>
+          <th class="text-center" style="width:120px;"># แถว</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td class="text-center">
+            <input type="checkbox" class="rowchk" name="values" value="{{ it.raw }}">
+          </td>
+          <td class="fw-bold">{{ it.raw }}</td>
+          <td class="text-center">{{ it.cnt }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</form>
+
+<script>
+(function(){
+  const btn = document.getElementById('btnApply');
+  const masterInput = document.querySelector('input[name="master"]');
+
+  function refresh(){
+    const checked = document.querySelectorAll('.rowchk:checked').length;
+    const hasMaster = !!(masterInput && (masterInput.value || '').trim());
+    btn.disabled = (checked < 1) || !hasMaster;
+  }
+
+  // dblclick row to copy raw into master (then user can shorten e.g. SPX)
+  document.querySelectorAll('tbody tr').forEach(tr => {
+    tr.addEventListener('dblclick', () => {
+      const raw = (tr.querySelector('td.fw-bold')?.innerText || '').trim();
+      if (raw && masterInput) {
+        masterInput.value = raw;
+        refresh();
+      }
+    });
+  });
+
+  if (masterInput) {
+    masterInput.addEventListener('input', refresh);
+  }
+  document.querySelectorAll('.rowchk').forEach(x => x.addEventListener('change', refresh));
+  refresh();
+})();
+</script>
+
+{% endblock %}
