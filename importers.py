@@ -115,25 +115,53 @@ def get_or_create_shop(platform, shop_name):
     return shop
 
 # ===== Importers =====
+# Optimized: ใช้ batch query แทน query ทีละแถว (แก้ปัญหา N+1 query กับ Turso)
 def import_products(df: pd.DataFrame) -> int:
     sku_col   = first_existing(df, COMMON_PRODUCT_SKU)   or "รหัสสินค้า"
     brand_col = first_existing(df, COMMON_PRODUCT_BRAND) or "Brand"
     model_col = first_existing(df, COMMON_PRODUCT_MODEL) or "ชื่อสินค้า"
+
+    # เตรียมข้อมูล SKU ทั้งหมด
+    sku_list = []
+    for _, row in df.iterrows():
+        sku = str(row.get(sku_col, "")).strip()
+        if sku:
+            sku_list.append(sku)
+
+    if not sku_list:
+        return 0
+
+    # Batch query: โหลด Product ทั้งหมดที่มีอยู่แล้วในครั้งเดียว
+    existing_products = Product.query.filter(Product.sku.in_(sku_list)).all()
+    product_map = {p.sku: p for p in existing_products}
+
     cnt = 0
+    new_products = []
+
     for _, row in df.iterrows():
         sku = str(row.get(sku_col, "")).strip()
         if not sku:
             continue
-        prod = Product.query.filter_by(sku=sku).first()
+
+        prod = product_map.get(sku)
         if not prod:
             prod = Product(sku=sku)
+            product_map[sku] = prod  # เพิ่มเข้า map เพื่อกัน duplicate ใน batch
+            new_products.append(prod)
+
         prod.brand = str(row.get(brand_col, "")).strip()
         prod.model = str(row.get(model_col, "")).strip()
-        db.session.add(prod); cnt += 1
+        cnt += 1
+
+    # Batch insert Product ใหม่
+    if new_products:
+        db.session.add_all(new_products)
+
     db.session.commit()
     return cnt
 
 # >>> ฟังก์ชันนี้ถูกแพตช์ใหม่ให้ทน NaN/หัวคอลัมน์หลายแบบ + Full Sync Mode
+# >>> Optimized: ใช้ batch query แทน query ทีละแถว (แก้ปัญหา N+1 query กับ Turso)
 def import_stock(df: pd.DataFrame, full_replace: bool = True) -> int:
     """
     นำเข้าสต็อกจาก DataFrame:
@@ -176,21 +204,37 @@ def import_stock(df: pd.DataFrame, full_replace: bool = True) -> int:
     # รวมยอดตาม SKU (กันไฟล์ซ้ำแถว)
     agg = df.groupby("sku", as_index=False)["qty"].sum()
 
+    # ===== OPTIMIZED: Batch query แทน query ทีละแถว =====
+    sku_list = agg["sku"].tolist()
+
+    # 1. โหลด Stock ทั้งหมดที่ต้องการในครั้งเดียว
+    existing_stocks = Stock.query.filter(Stock.sku.in_(sku_list)).all()
+    stock_map = {st.sku: st for st in existing_stocks}
+
+    # 2. โหลด Product ทั้งหมดที่ต้องการในครั้งเดียว (สำหรับ sync stock_qty)
+    existing_products = Product.query.filter(Product.sku.in_(sku_list)).all()
+    product_map = {p.sku: p for p in existing_products}
+
+    # 3. เตรียมข้อมูลสำหรับ insert/update
+    now_ts = datetime.now(TH_TZ)
+    new_stocks = []
+
     saved = 0
     for _, row in agg.iterrows():
         sku = row["sku"]
         qty = int(row["qty"] or 0)
 
-        st = Stock.query.filter_by(sku=sku).first()
+        st = stock_map.get(sku)
         if not st:
-            st = Stock(sku=sku, qty=qty)
-            db.session.add(st)
+            # สร้าง Stock ใหม่
+            new_stocks.append(Stock(sku=sku, qty=qty))
         else:
+            # Update Stock ที่มีอยู่
             st.qty = qty
-            st.updated_at = datetime.now(TH_TZ)
+            st.updated_at = now_ts
 
         # ถ้ามีฟิลด์ product.stock_qty ให้ sync ด้วย
-        prod = Product.query.filter_by(sku=sku).first()
+        prod = product_map.get(sku)
         if prod is not None and hasattr(prod, "stock_qty"):
             try:
                 prod.stock_qty = qty
@@ -200,9 +244,14 @@ def import_stock(df: pd.DataFrame, full_replace: bool = True) -> int:
 
         saved += 1
 
+    # 4. Batch insert Stock ใหม่ทั้งหมด
+    if new_stocks:
+        db.session.add_all(new_stocks)
+
     db.session.commit()
     return saved
 
+# Optimized: ใช้ batch query แทน query ทีละแถว (แก้ปัญหา N+1 query กับ Turso)
 def import_sales(df: pd.DataFrame) -> dict:
     """
     นำเข้าข้อมูลใบสั่งขาย (Sales)
@@ -221,15 +270,17 @@ def import_sales(df: pd.DataFrame) -> dict:
     processed_ids = []  # เก็บ Order ID ที่ทำสำเร็จ
     skipped_rows = []   # เก็บข้อมูลแถวที่ถูกข้าม
 
-    # 2. แปลงข้อมูลให้สะอาด
+    # ===== OPTIMIZED: เตรียม Order ID ทั้งหมดก่อน แล้ว batch query =====
+    # 2. แปลงข้อมูลและเก็บ Order ID ที่ valid
+    valid_rows = []  # เก็บ (idx, oid, row) ที่ valid
+    oid_list = []    # เก็บ Order ID ทั้งหมดสำหรับ batch query
+
     for idx, row in df.iterrows():
-        # แปลง Order ID ให้ปลอดภัย (รองรับตัวเลขขนาดใหญ่)
         raw_oid = row.get(col_oid, "")
 
         # กรณี Order ID เป็นตัวเลขขนาดใหญ่ (scientific notation)
         if pd.notna(raw_oid):
             try:
-                # ถ้าเป็น float ให้แปลงเป็น int ก่อนแล้วค่อยแปลงเป็น string
                 if isinstance(raw_oid, (int, float)):
                     oid = str(int(raw_oid)).strip()
                 else:
@@ -242,7 +293,7 @@ def import_sales(df: pd.DataFrame) -> dict:
         # ข้ามถ้าไม่มี Order ID
         if not oid or oid == 'nan' or oid == 'None':
             skipped_rows.append({
-                "row_number": idx + 2,  # +2 เพราะ index เริ่มที่ 0 และมี header row
+                "row_number": idx + 2,
                 "reason": "Order ID ว่างเปล่า",
                 "order_id": raw_oid if pd.notna(raw_oid) else "(ว่าง)",
                 "po_no": row.get(col_po, "") if col_po else "",
@@ -250,14 +301,27 @@ def import_sales(df: pd.DataFrame) -> dict:
             })
             continue
 
-        try:
-            # หาข้อมูล Sales เดิม (ถ้ามี)
-            sale = Sales.query.filter_by(order_id=oid).first()
+        valid_rows.append((idx, oid, row))
+        oid_list.append(oid)
 
-            # ถ้าไม่มี ให้สร้างใหม่
+    if not oid_list:
+        return {"ids": processed_ids, "skipped": skipped_rows}
+
+    # 3. Batch query: โหลด Sales ทั้งหมดที่มีอยู่แล้วในครั้งเดียว
+    existing_sales = Sales.query.filter(Sales.order_id.in_(oid_list)).all()
+    sales_map = {s.order_id: s for s in existing_sales}
+
+    # 4. ประมวลผลแต่ละ row
+    new_sales = []
+
+    for idx, oid, row in valid_rows:
+        try:
+            sale = sales_map.get(oid)
+
             if not sale:
                 sale = Sales(order_id=oid)
-                db.session.add(sale)
+                sales_map[oid] = sale  # เพิ่มเข้า map เพื่อกัน duplicate
+                new_sales.append(sale)
 
             # อัปเดตข้อมูล
             if col_po and pd.notna(row.get(col_po)):
@@ -270,11 +334,9 @@ def import_sales(df: pd.DataFrame) -> dict:
                 if val_st:
                     sale.status = val_st
 
-            # เก็บ ID เข้า List
             processed_ids.append(oid)
 
         except Exception as e:
-            # บันทึกข้อผิดพลาดที่เกิดขึ้นระหว่างการประมวลผล
             skipped_rows.append({
                 "row_number": idx + 2,
                 "reason": f"เกิดข้อผิดพลาด: {str(e)}",
@@ -283,6 +345,10 @@ def import_sales(df: pd.DataFrame) -> dict:
                 "status": row.get(col_st, "") if col_st else ""
             })
             continue
+
+    # 5. Batch insert Sales ใหม่
+    if new_sales:
+        db.session.add_all(new_sales)
 
     db.session.commit()
 
@@ -294,10 +360,11 @@ def import_sales(df: pd.DataFrame) -> dict:
 # ============================
 # INSERT-ONLY ORDER IMPORTER
 # ============================
+# Optimized: ใช้ batch query แทน query ทีละแถว (แก้ปัญหา N+1 query กับ Turso)
 def import_orders(df: pd.DataFrame, platform: str, shop_name: str | None, import_date: date) -> dict:
     """
     นำเข้าออเดอร์แบบ INSERT-ONLY พร้อมส่งคืนสถิติละเอียด
-    
+
     Returns dict:
         {
             'added': int,           # จำนวน Order ID ที่เพิ่มสำเร็จ (ไม่ซ้ำ)
@@ -346,11 +413,16 @@ def import_orders(df: pd.DataFrame, platform: str, shop_name: str | None, import
     # key = (shop, order_id), value = list of items
     grouped: dict[tuple[str, str], list[dict]] = {}
     failed_oids_in_parsing: set[str] = set()
-    
+
+    # เก็บข้อมูลสำหรับ batch query
+    all_shop_names: set[str] = set()
+    all_skus: set[str] = set()
+    all_logi_raw: set[str] = set()
+
     for idx, row in df.iterrows():
         oid = str(row.get(order_col, "")).strip()
         sku = str(row.get(sku_col, "")).strip()
-        
+
         # เช็คข้อมูลสำคัญ
         if not oid or not sku:
             if oid and oid not in failed_oids_in_parsing:
@@ -379,40 +451,129 @@ def import_orders(df: pd.DataFrame, platform: str, shop_name: str | None, import
         qty = pd.to_numeric(row.get(qty_col), errors="coerce") if qty_col else None
         qty = int(qty) if pd.notnull(qty) else 1
 
+        logi_raw = str(row.get(logi_col, "") or "") if logi_col else ""
+
         key = (sname, oid)
         if key not in grouped:
             grouped[key] = []
-        
+
         grouped[key].append({
             "sku": sku,
             "qty": max(qty, 0),
             "name": str(row.get(name_col, "") or ""),
             "time": row.get(time_col) if time_col else None,
-            "logi": str(row.get(logi_col, "") or "") if logi_col else "",
+            "logi": logi_raw,
         })
+
+        # เก็บข้อมูลสำหรับ batch query
+        all_shop_names.add(sname)
+        all_skus.add(sku)
+        if logi_raw:
+            all_logi_raw.add(logi_raw)
 
     if not grouped and stats["failed"] == 0:
         return stats  # Empty but valid file structure
 
     has_product_fk = hasattr(OrderLine, "product_id")
 
+    # ===== OPTIMIZED: Batch pre-load data =====
+
+    # 1. Batch load/create Shops
+    shop_map: dict[str, Shop] = {}  # name -> Shop
+    if all_shop_names:
+        existing_shops = (
+            Shop.query
+            .filter(Shop.platform == platform_std)
+            .filter(func.lower(Shop.name).in_([n.lower() for n in all_shop_names]))
+            .all()
+        )
+        for s in existing_shops:
+            shop_map[s.name.lower()] = s
+
+        # สร้าง Shops ที่ยังไม่มี
+        new_shops = []
+        for sname in all_shop_names:
+            if sname.lower() not in shop_map:
+                new_shop = Shop(platform=platform_std, name=sname)
+                new_shops.append(new_shop)
+                shop_map[sname.lower()] = new_shop
+
+        if new_shops:
+            db.session.add_all(new_shops)
+            db.session.flush()  # ให้ได้ shop.id
+
+    # 2. Batch load Products (ถ้าต้องการ product_id)
+    product_map: dict[str, Product] = {}
+    if has_product_fk and all_skus:
+        existing_products = Product.query.filter(Product.sku.in_(list(all_skus))).all()
+        product_map = {p.sku: p for p in existing_products}
+
+    # 3. Batch load LogisticAlias
+    logi_map: dict[str, str] = {}  # alias_key -> master_text
+    if all_logi_raw:
+        logi_keys = [normalize_text_key(r) for r in all_logi_raw if r]
+        if logi_keys:
+            existing_logi = LogisticAlias.query.filter(LogisticAlias.alias_key.in_(logi_keys)).all()
+            for la in existing_logi:
+                if la.master_text:
+                    logi_map[la.alias_key] = la.master_text
+
+    # 4. Batch check existing OrderLines (เช็ค duplicates)
+    # เก็บ (shop_id, order_id) -> OrderLine ที่มีอยู่แล้ว
+    existing_orderlines_map: dict[tuple[int, str], OrderLine] = {}
+    order_ids_to_check = [oid for (sname, oid) in grouped.keys()]
+    shop_ids_to_check = [shop_map.get(sname.lower()).id for (sname, oid) in grouped.keys() if shop_map.get(sname.lower())]
+
+    if order_ids_to_check and shop_ids_to_check:
+        # Query ทั้งหมดในครั้งเดียว
+        existing_lines = (
+            OrderLine.query
+            .filter(OrderLine.shop_id.in_(set(shop_ids_to_check)))
+            .filter(OrderLine.order_id.in_(set(order_ids_to_check)))
+            .all()
+        )
+        for line in existing_lines:
+            key = (line.shop_id, line.order_id)
+            if key not in existing_orderlines_map:
+                existing_orderlines_map[key] = line
+
+    # Helper function สำหรับ resolve logistic (ใช้ cache)
+    def resolve_logistic_cached(raw: str) -> str:
+        raw = (raw or "").strip()
+        if not raw:
+            return "-"
+        k = normalize_text_key(raw)
+        if k in logi_map:
+            return (logi_map[k] or "").strip() or "-"
+        return raw
+
     # Process แต่ละ Order (ระดับ Transaction)
+    new_orderlines = []
+
     for (sname, oid), items in grouped.items():
         try:
-            shop = get_or_create_shop(platform_std, sname)
+            shop = shop_map.get(sname.lower())
+            if not shop:
+                # กรณีหา shop ไม่เจอ (ไม่น่าเกิด)
+                if oid not in stats["failed_ids"]:
+                    stats["failed"] += 1
+                    stats["failed_ids"].append(oid)
+                if len(stats["errors"]) < 10:
+                    stats["errors"].append(f"Order {oid}: ไม่พบร้าน {sname}")
+                continue
 
-            # เช็คว่า Order นี้เคยมีในระบบแล้วหรือยัง (เช็คระดับ Order)
-            exists = OrderLine.query.filter_by(shop_id=shop.id, order_id=oid).first()
+            # เช็คว่า Order นี้เคยมีในระบบแล้วหรือยัง (ใช้ cached data)
+            exists = existing_orderlines_map.get((shop.id, oid))
             if exists:
                 if oid not in stats["duplicate_ids"]:
                     stats["duplicates"] += 1
                     stats["duplicate_ids"].append(oid)
-                    
-                    # [NEW] เช็คว่าซ้ำข้ามวันหรือซ้ำในวันเดียวกัน
+
+                    # เช็คว่าซ้ำข้ามวันหรือซ้ำในวันเดียวกัน
                     is_old_duplicate = True
                     if exists.import_date and exists.import_date == import_date:
                         is_old_duplicate = False
-                    
+
                     if is_old_duplicate:
                         stats["duplicates_old"] += 1
                         stats["duplicate_old_ids"].append(oid)
@@ -444,7 +605,7 @@ def import_orders(df: pd.DataFrame, platform: str, shop_name: str | None, import
             items_added_count = 0
             for sku, rec in sku_agg.items():
                 order_time = parse_datetime_guess(rec.get("time")) if rec.get("time") is not None else None
-                logistic_type = resolve_logistic_master(rec.get("logi") or "")
+                logistic_type = resolve_logistic_cached(rec.get("logi") or "")
 
                 ol_kwargs = dict(
                     platform=platform_std,
@@ -458,16 +619,16 @@ def import_orders(df: pd.DataFrame, platform: str, shop_name: str | None, import
                     import_date=import_date,
                 )
 
-                # ผูก product ถ้าตารางมีและเจอสินค้า
+                # ผูก product ถ้าตารางมีและเจอสินค้า (ใช้ cached data)
                 if has_product_fk:
-                    prod = Product.query.filter_by(sku=sku).first()
+                    prod = product_map.get(sku)
                     if prod:
                         ol_kwargs["product_id"] = prod.id
 
                 line = OrderLine(**ol_kwargs)
-                db.session.add(line)
+                new_orderlines.append(line)
                 items_added_count += 1
-            
+
             # นับยอด Added (เฉพาะถ้ายังไม่เคยนับ)
             if items_added_count > 0 and oid not in stats["added_ids"]:
                 stats["added"] += 1
@@ -479,6 +640,10 @@ def import_orders(df: pd.DataFrame, platform: str, shop_name: str | None, import
                 stats["failed_ids"].append(oid)
             if len(stats["errors"]) < 10:
                 stats["errors"].append(f"Order {oid}: {str(e)}")
+
+    # Batch insert OrderLines ทั้งหมด
+    if new_orderlines:
+        db.session.add_all(new_orderlines)
 
     db.session.commit()
     return stats
